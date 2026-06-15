@@ -55,15 +55,6 @@ app.use('/api/manager', managerRoutes);
 app.use('/api/worker', workerRoutes);
 app.use('/api/push', pushRoutes);
 
-// Serve static client build in production (single-server deployment)
-if (process.env.NODE_ENV === 'production') {
-    const clientDist = path.join(__dirname, '..', '..', 'client', 'dist');
-    app.use(express.static(clientDist));
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(clientDist, 'index.html'));
-    });
-}
-
 app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);
     res.status(500).json({ error: 'Internal server error' });
