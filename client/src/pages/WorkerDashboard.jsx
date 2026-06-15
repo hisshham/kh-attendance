@@ -33,8 +33,20 @@ export default function WorkerDashboard() {
 
     async function setupPush() {
         try {
+            if (!('serviceWorker' in navigator)) {
+                alert('Service Worker is not supported on this browser.');
+                return;
+            }
+            if (!('PushManager' in window)) {
+                alert('PushManager is not supported on this browser/OS.');
+                return;
+            }
             const reg = await navigator.serviceWorker.ready;
             const res = await api.get('/api/push/vapid-key');
+            if (!res.data.publicKey) {
+                alert('Server returned empty VAPID key!');
+                return;
+            }
             const sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
                 applicationServerKey: await urlBase64ToUint8Array(res.data.publicKey)
@@ -43,15 +55,20 @@ export default function WorkerDashboard() {
             setPushEnabled(true);
         } catch (err) {
             console.error('Push error:', err);
+            alert('Push failed: ' + (err.message || String(err)));
         }
     }
 
     async function requestPush() {
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-            await setupPush();
-        } else {
-            alert('Push notifications denied by user.');
+        try {
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                await setupPush();
+            } else {
+                alert('Push notifications denied by phone settings. Permission status: ' + permission);
+            }
+        } catch (err) {
+            alert('Request permission failed: ' + err.message);
         }
     }
 
