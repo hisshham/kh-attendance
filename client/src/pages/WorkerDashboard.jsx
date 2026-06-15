@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
+import { getSocket } from '../services/socket';
+
+const hasPushSupport = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window;
 
 export default function WorkerDashboard() {
     const { user, logout } = useAuth();
@@ -11,13 +14,22 @@ export default function WorkerDashboard() {
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-    const [pushEnabled, setPushEnabled] = useState(Notification.permission === 'granted');
+    const [pushEnabled, setPushEnabled] = useState(hasPushSupport && Notification.permission === 'granted');
 
     useEffect(() => {
         loadToday();
-        if (Notification.permission === 'granted') {
+
+        // Register this worker as online via socket
+        const socket = getSocket();
+        socket.emit('worker_online', user?.workerId);
+
+        if (hasPushSupport && Notification.permission === 'granted') {
             setupPush();
         }
+
+        return () => {
+            socket.emit('worker_offline', user?.workerId);
+        };
     }, []);
 
     async function urlBase64ToUint8Array(base64String) {
@@ -33,18 +45,14 @@ export default function WorkerDashboard() {
 
     async function setupPush() {
         try {
-            if (!('serviceWorker' in navigator)) {
-                alert('Service Worker is not supported on this browser.');
-                return;
-            }
-            if (!('PushManager' in window)) {
-                alert('PushManager is not supported on this browser/OS.');
+            if (!hasPushSupport) {
+                alert('Push notifications are not supported on this device. On iPhone, you must first "Add to Home Screen" from Safari.');
                 return;
             }
             const reg = await navigator.serviceWorker.ready;
             const res = await api.get('/api/push/vapid-key');
             if (!res.data.publicKey) {
-                alert('Server returned empty VAPID key!');
+                alert('Server returned empty VAPID key. Please try again in a moment.');
                 return;
             }
             const sub = await reg.pushManager.subscribe({
@@ -55,20 +63,24 @@ export default function WorkerDashboard() {
             setPushEnabled(true);
         } catch (err) {
             console.error('Push error:', err);
-            alert('Push failed: ' + (err.message || String(err)));
+            alert('Push notification setup failed: ' + (err.message || String(err)));
         }
     }
 
     async function requestPush() {
         try {
+            if (!hasPushSupport) {
+                alert('Push notifications are not supported in this browser. On iPhone, open this website in Safari, tap the Share button, then tap "Add to Home Screen". Open the app from your home screen and try again.');
+                return;
+            }
             const permission = await Notification.requestPermission();
             if (permission === 'granted') {
                 await setupPush();
             } else {
-                alert('Push notifications denied by phone settings. Permission status: ' + permission);
+                alert('Push notifications were denied. Please go to your phone Settings > Notifications and allow notifications for this app.');
             }
         } catch (err) {
-            alert('Request permission failed: ' + err.message);
+            alert('Could not request notification permission: ' + err.message);
         }
     }
 
@@ -112,12 +124,12 @@ export default function WorkerDashboard() {
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><div className="loader"></div></div>;
 
     return (
-        <div className="layout-enterprise" style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', height: '100%', padding: '24px 0' }}>
-                <header className="dashboard-header" style={{ margin: '0 24px 24px', position: 'relative', overflow: 'hidden' }}>
+        <div className="mobile-scroll-wrapper" style={{ alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', minHeight: '100vh', padding: '24px 16px' }}>
+                <header className="dashboard-header" style={{ margin: '0 0 24px', position: 'relative', overflow: 'hidden' }}>
                     <div style={{ position: 'relative', zIndex: 2 }}>
                         <p style={{ color: 'var(--text-secondary)', marginBottom: '4px', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>{greeting},</p>
-                        <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>{user?.name || user?.workerId}</h1>
+                        <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>{user?.name || user?.workerId}</h1>
                         <span className="badge badge-green" style={{ background: 'var(--bg-primary)' }}>ID: {user?.workerId}</span>
                     </div>
                     <button className="btn btn-outline" style={{ position: 'relative', zIndex: 2, background: 'rgba(0,0,0,0.3)' }} onClick={logout}>⏏ Logout</button>
@@ -126,19 +138,28 @@ export default function WorkerDashboard() {
                     <div style={{ position: 'absolute', bottom: -50, right: 100, width: 150, height: 150, background: 'var(--accent-green)', opacity: 0.1, borderRadius: '50%', filter: 'blur(30px)' }}></div>
                 </header>
 
-                {!pushEnabled && typeof Notification !== 'undefined' && (
-                    <div style={{ margin: '0 24px 24px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid var(--border-active)', padding: '16px', borderRadius: 'var(--radius-md)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                {!pushEnabled && hasPushSupport && (
+                    <div className="push-banner">
                         <div>
                             <strong style={{ color: 'var(--accent-blue)' }}>🔔 Enable Daily Reminders</strong>
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Get notified exactly when it's time to log attendance.</p>
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Get notified when it's time to log attendance.</p>
                         </div>
                         <button className="btn btn-sm btn-primary" onClick={requestPush}>Enable</button>
                     </div>
                 )}
 
-                <main style={{ flex: 1, padding: '0 24px', overflowY: 'auto' }}>
-                    <div className="card" style={{ padding: '40px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-                        <h2 style={{ fontSize: '24px' }}>📋 Daily Attendance Entry</h2>
+                {!hasPushSupport && (
+                    <div className="push-banner" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)' }}>
+                        <div>
+                            <strong style={{ color: 'var(--accent-red)' }}>📱 iPhone Notice</strong>
+                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>To receive notifications, open this page in Safari → tap Share → "Add to Home Screen" → open from home screen.</p>
+                        </div>
+                    </div>
+                )}
+
+                <main style={{ flex: 1 }}>
+                    <div className="card" style={{ padding: '32px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
+                        <h2 style={{ fontSize: '22px' }}>📋 Daily Attendance Entry</h2>
                         <div className="date-display" style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
                             {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </div>
@@ -163,8 +184,8 @@ export default function WorkerDashboard() {
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-                                <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Select you assigned role for the day:</p>
-                                <div className="category-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', margin: '0 0 32px' }}>
+                                <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Select your assigned role for the day:</p>
+                                <div className="category-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', margin: '0 0 32px' }}>
                                     {categories.map((cat) => (
                                         <button
                                             key={cat}

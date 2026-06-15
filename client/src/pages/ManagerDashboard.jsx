@@ -19,6 +19,7 @@ export default function ManagerDashboard() {
     const [workers, setWorkers] = useState([]);
     const [categories, setCategories] = useState([]);
     const [notificationTime, setNotificationTime] = useState('08:30');
+    const [onlineWorkerIds, setOnlineWorkerIds] = useState([]);
 
     // UI state
     const [newWorker, setNewWorker] = useState({ workerId: '', name: '', pin: '123456' });
@@ -42,8 +43,14 @@ export default function ManagerDashboard() {
             socket.on('attendance_update', () => {
                 loadAttendance();
             });
+            socket.on('online_workers', (ids) => {
+                setOnlineWorkerIds(ids || []);
+            });
 
-            return () => { socket.off('attendance_update'); };
+            return () => {
+                socket.off('attendance_update');
+                socket.off('online_workers');
+            };
         }
     }, [token, selectedDate]);
 
@@ -161,272 +168,302 @@ export default function ManagerDashboard() {
     const presentCount = attendances.length;
     const absentCount = absentWorkers.length;
     const attendancePercentage = workerStrength === 0 ? 0 : Math.round((presentCount / workerStrength) * 100);
+    const onlineCount = onlineWorkerIds.length;
 
     return (
-        <div className="layout-enterprise">
-            {/* Sidebar */}
-            <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-                <div className="sidebar-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="mobile-scroll-wrapper">
+            {/* Mobile Top Bar */}
+            <div className="mobile-topbar">
+                <div className="mobile-topbar-left">
+                    <h2>📊 KH Attendance</h2>
+                    <span className="badge badge-manager">Admin</span>
+                </div>
+                <button className="mobile-menu-toggle" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                    {isMobileMenuOpen ? '✕' : '☰'}
+                </button>
+            </div>
+            {isMobileMenuOpen && (
+                <div className="mobile-nav-dropdown">
+                    <button className={`mobile-nav-item ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }}>📊 Overview</button>
+                    <button className={`mobile-nav-item ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => { setActiveTab('attendance'); setIsMobileMenuOpen(false); }}>📋 Daily Logs</button>
+                    <button className={`mobile-nav-item ${activeTab === 'workers' ? 'active' : ''}`} onClick={() => { setActiveTab('workers'); setIsMobileMenuOpen(false); }}>👥 Workers</button>
+                    <button className={`mobile-nav-item ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }}>⚙️ Settings</button>
+                    <button className="mobile-nav-item logout-item" onClick={logout}>⏏ Logout</button>
+                </div>
+            )}
+
+            <div className="layout-enterprise">
+                {/* Desktop Sidebar */}
+                <aside className="sidebar desktop-only">
+                    <div className="sidebar-header">
                         <h2>Attendance</h2>
                         <span className="badge badge-manager">Admin</span>
                     </div>
-                    <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
-                        {isMobileMenuOpen ? '✕' : '☰'}
-                    </button>
-                </div>
 
-                <div className={`sidebar-content ${isMobileMenuOpen ? 'open' : ''}`}>
                     <nav className="sidebar-nav">
-                        <button className={`nav-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }}>
+                        <button className={`nav-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
                             📊 Overview
                         </button>
-                        <button className={`nav-btn ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => { setActiveTab('attendance'); setIsMobileMenuOpen(false); }}>
+                        <button className={`nav-btn ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
                             📋 Daily Logs
                         </button>
-                        <button className={`nav-btn ${activeTab === 'workers' ? 'active' : ''}`} onClick={() => { setActiveTab('workers'); setIsMobileMenuOpen(false); }}>
+                        <button className={`nav-btn ${activeTab === 'workers' ? 'active' : ''}`} onClick={() => setActiveTab('workers')}>
                             👥 Workers
                         </button>
-                        <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }}>
+                        <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
                             ⚙️ Settings
                         </button>
                     </nav>
 
-                <div className="sidebar-footer">
-                    <div className="user-info">
-                        <div className="avatar">M</div>
+                    <div className="sidebar-footer">
+                        <div className="user-info">
+                            <div className="avatar">M</div>
+                            <div>
+                                <p className="name">{user?.username || 'Manager'}</p>
+                                <p className="role">System Admin</p>
+                            </div>
+                        </div>
+                        <button className="btn btn-outline btn-full" onClick={logout}>Logout</button>
+                    </div>
+                </aside>
+
+                {/* Main Content */}
+                <main className="main-content">
+                    <header className="topbar">
                         <div>
-                            <p className="name">{user?.username || 'Manager'}</p>
-                            <p className="role">System Admin</p>
+                            <h1>{activeTab === 'overview' ? 'Dashboard Overview' : activeTab === 'attendance' ? 'Daily Attendance Logs' : activeTab === 'workers' ? 'Worker Management' : 'System Settings'}</h1>
+                            <p className="subtitle">{new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                         </div>
-                    </div>
-                    <button className="btn btn-outline btn-full" onClick={logout}>Logout</button>
-                </div>
-                </div>
-            </aside>
-
-            {/* Main Content */}
-            <main className="main-content">
-                <header className="topbar">
-                    <div>
-                        <h1>{activeTab === 'overview' ? 'Dashboard Overview' : activeTab === 'attendance' ? 'Daily Attendance Logs' : activeTab === 'workers' ? 'Worker Management' : 'System Settings'}</h1>
-                        <p className="subtitle">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-                    </div>
-                    {activeTab === 'attendance' && (
-                        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                            <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="date-input" />
-                            <button className="btn btn-sm btn-primary" onClick={exportCSV}>📥 Export CSV</button>
-                        </div>
-                    )}
-                </header>
-
-                <div className="content-scroll">
-                    {message && <div className="success-msg" style={{ marginBottom: '24px' }}>{message}</div>}
-
-                    {/* ── OVERVIEW TAB ── */}
-                    {activeTab === 'overview' && (
-                        <>
-                            <div className="stats-row">
-                                <div className="stat-card total">
-                                    <span className="stat-label">Worker Strength</span>
-                                    <span className="stat-number">{workerStrength}</span>
-                                </div>
-                                <div className="stat-card present">
-                                    <span className="stat-label">Present Today</span>
-                                    <span className="stat-number">{presentCount} <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>({attendancePercentage}%)</span></span>
-                                </div>
-                                <div className="stat-card absent">
-                                    <span className="stat-label">Absent Today</span>
-                                    <span className="stat-number">{absentCount}</span>
-                                </div>
-                                <div className="stat-card" style={{ borderLeft: '4px solid var(--accent-purple)' }}>
-                                    <span className="stat-label">🔔 Notification Timer</span>
-                                    <span className="stat-number" style={{ fontSize: '32px' }}>{notificationTime || '08:30'}</span>
-                                    <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Daily reminder for absent workers</span>
-                                </div>
+                        {activeTab === 'attendance' && (
+                            <div className="topbar-controls">
+                                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="date-input" />
+                                <button className="btn btn-sm btn-primary" onClick={exportCSV}>📥 Export</button>
                             </div>
+                        )}
+                    </header>
 
+                    <div className="content-scroll">
+                        {message && <div className="success-msg" style={{ marginBottom: '24px' }}>{message}</div>}
+
+                        {/* ── OVERVIEW TAB ── */}
+                        {activeTab === 'overview' && (
+                            <>
+                                <div className="stats-row">
+                                    <div className="stat-card total">
+                                        <span className="stat-label">Worker Strength</span>
+                                        <span className="stat-number">{workerStrength}</span>
+                                    </div>
+                                    <div className="stat-card present">
+                                        <span className="stat-label">Present Today</span>
+                                        <span className="stat-number">{presentCount} <span style={{ fontSize: '16px', color: 'var(--text-muted)' }}>({attendancePercentage}%)</span></span>
+                                    </div>
+                                    <div className="stat-card absent">
+                                        <span className="stat-label">Absent Today</span>
+                                        <span className="stat-number">{absentCount}</span>
+                                    </div>
+                                    <div className="stat-card" style={{ borderLeft: '4px solid var(--accent-purple)' }}>
+                                        <span className="stat-label">🟢 Online Now</span>
+                                        <span className="stat-number">{onlineCount}</span>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Workers connected</span>
+                                    </div>
+                                </div>
+
+                                <div className="stats-row" style={{ gridTemplateColumns: '1fr' }}>
+                                    <div className="stat-card" style={{ borderLeft: '4px solid var(--accent-purple)' }}>
+                                        <span className="stat-label">🔔 Notification Timer</span>
+                                        <span className="stat-number" style={{ fontSize: '32px' }}>{notificationTime || '08:30'}</span>
+                                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>Daily reminder for absent workers</span>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <h3>Recent Punches (Today)</h3>
+                                    <div className="table-wrapper">
+                                        <table>
+                                            <thead><tr><th>Worker</th><th>Category</th><th>Time</th></tr></thead>
+                                            <tbody>
+                                                {attendances.slice(0, 8).map(a => (
+                                                    <tr key={a.id}>
+                                                        <td><strong>{a.worker?.name}</strong> <span style={{ color: 'var(--text-muted)' }}>({a.worker?.workerId})</span></td>
+                                                        <td><span className="badge">{a.category}</span></td>
+                                                        <td>{new Date(a.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</td>
+                                                    </tr>
+                                                ))}
+                                                {attendances.length === 0 && <tr><td colSpan="3" align="center">No recent punches</td></tr>}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* ── ATTENDANCE LOGS TAB ── */}
+                        {activeTab === 'attendance' && (
                             <div className="card">
-                                <h3>Recent Punches (Today)</h3>
+                                <h3 style={{ color: '#10b981', marginBottom: '16px' }}>Present ({attendances.length})</h3>
+                                {attendances.length > 0 ? (
+                                    <div className="table-wrapper">
+                                        <table>
+                                            <thead><tr><th>Worker ID</th><th>Name</th><th>Category</th><th>Punch Time</th></tr></thead>
+                                            <tbody>
+                                                {attendances.map((a) => (
+                                                    <tr key={a.id}>
+                                                        <td>{a.worker?.workerId}</td>
+                                                        <td>{a.worker?.name}</td>
+                                                        <td><span className="badge">{a.category}</span></td>
+                                                        <td>{new Date(a.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                ) : <p className="empty-text">No attendance recorded for this date.</p>}
+
+                                <h3 style={{ color: '#f43f5e', margin: '32px 0 16px' }}>Absent ({absentWorkers.length})</h3>
+                                <div className="absent-grid">
+                                    {absentWorkers.map(w => (
+                                        <div key={w.id} className="absent-card">
+                                            <span className="w-id">{w.workerId}</span>
+                                            <span className="w-name">{w.name}</span>
+                                        </div>
+                                    ))}
+                                    {absentWorkers.length === 0 && <p className="empty-text">Everyone is present!</p>}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* ── WORKERS TAB ── */}
+                        {activeTab === 'workers' && (
+                            <div className="card">
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+                                    <h3>Total Strength: {workers.length} Workers</h3>
+                                    <span className="badge badge-green">🟢 {onlineCount} Online Now</span>
+                                </div>
+
+                                <form onSubmit={handleAddWorker} className="add-worker-form">
+                                    <input placeholder="Worker ID (e.g. WRK-001)" value={newWorker.workerId} onChange={(e) => setNewWorker({ ...newWorker, workerId: e.target.value.toUpperCase() })} required />
+                                    <input placeholder="Full Name" value={newWorker.name} onChange={(e) => setNewWorker({ ...newWorker, name: e.target.value })} required />
+                                    <input placeholder="Initial PIN" value={newWorker.pin} onChange={(e) => setNewWorker({ ...newWorker, pin: e.target.value })} required />
+                                    <button type="submit" className="btn btn-primary">Add Worker</button>
+                                </form>
+
                                 <div className="table-wrapper">
                                     <table>
-                                        <thead><tr><th>Worker</th><th>Category</th><th>Time</th></tr></thead>
+                                        <thead><tr><th>Worker ID</th><th>Name</th><th>Status</th><th>Online</th><th>Actions</th></tr></thead>
                                         <tbody>
-                                            {attendances.slice(0, 8).map(a => (
-                                                <tr key={a.id}>
-                                                    <td><strong>{a.worker?.name}</strong> <span style={{ color: 'var(--text-muted)' }}>({a.worker?.workerId})</span></td>
-                                                    <td><span className="badge">{a.category}</span></td>
-                                                    <td>{new Date(a.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</td>
+                                            {workers.map((w) => (
+                                                <tr key={w.id}>
+                                                    {editingId === w.id ? (
+                                                        <>
+                                                            <td><input value={editData.workerId} onChange={(e) => setEditData({ ...editData, workerId: e.target.value.toUpperCase() })} /></td>
+                                                            <td><input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} /></td>
+                                                            <td>-</td><td>-</td>
+                                                            <td className="action-btns">
+                                                                <button className="btn btn-tiny btn-primary" onClick={() => saveEdit(w.id)}>Save</button>
+                                                                <button className="btn btn-tiny btn-outline" onClick={() => setEditingId(null)}>Cancel</button>
+                                                            </td>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <td style={{ fontFamily: 'monospace' }}>{w.workerId}</td>
+                                                            <td style={{ fontWeight: 500 }}>{w.name}</td>
+                                                            <td><span className={`badge ${w.isActive ? 'badge-green' : 'badge-red'}`}>{w.isActive ? 'Active' : 'Inactive'}</span></td>
+                                                            <td>
+                                                                {onlineWorkerIds.includes(w.workerId)
+                                                                    ? <span className="online-dot">🟢 Online</span>
+                                                                    : <span className="offline-dot">⚫ Offline</span>
+                                                                }
+                                                            </td>
+                                                            <td className="action-btns">
+                                                                <button className="btn btn-tiny btn-outline" onClick={() => startEdit(w)}>Edit</button>
+                                                                <button className="btn btn-tiny" onClick={() => handleToggleWorker(w.id)}>{w.isActive ? 'Deact.' : 'Act.'}</button>
+                                                                <button className="btn btn-tiny btn-outline" onClick={() => handleResetPin(w.id)}>Reset PIN</button>
+                                                                <button className="btn btn-tiny btn-danger" onClick={() => handleDeleteWorker(w.id)}>Delete</button>
+                                                            </td>
+                                                        </>
+                                                    )}
                                                 </tr>
                                             ))}
-                                            {attendances.length === 0 && <tr><td colSpan="3" align="center">No recent punches</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>
                             </div>
-                        </>
-                    )}
+                        )}
 
-                    {/* ── ATTENDANCE LOGS TAB ── */}
-                    {activeTab === 'attendance' && (
-                        <div className="card">
-                            <h3 style={{ color: '#10b981', marginBottom: '16px' }}>Present ({attendances.length})</h3>
-                            {attendances.length > 0 ? (
-                                <div className="table-wrapper">
-                                    <table>
-                                        <thead><tr><th>Worker ID</th><th>Name</th><th>Category</th><th>Punch Time</th></tr></thead>
-                                        <tbody>
-                                            {attendances.map((a) => (
-                                                <tr key={a.id}>
-                                                    <td>{a.worker?.workerId}</td>
-                                                    <td>{a.worker?.name}</td>
-                                                    <td><span className="badge">{a.category}</span></td>
-                                                    <td>{new Date(a.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : <p className="empty-text">No attendance recorded.</p>}
-
-                            <h3 style={{ color: '#f43f5e', margin: '32px 0 16px' }}>Absent ({absentWorkers.length})</h3>
-                            <div className="absent-grid">
-                                {absentWorkers.map(w => (
-                                    <div key={w.id} className="absent-card">
-                                        <span className="w-id">{w.workerId}</span>
-                                        <span className="w-name">{w.name}</span>
-                                    </div>
-                                ))}
-                                {absentWorkers.length === 0 && <p className="empty-text">Everyone is present!</p>}
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── WORKERS TAB ── */}
-                    {activeTab === 'workers' && (
-                        <div className="card">
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                                <h3>Total Strength: {workers.length} Workers</h3>
-                            </div>
-
-                            <form onSubmit={handleAddWorker} className="add-worker-form">
-                                <input placeholder="Worker ID (e.g. WRK-001)" value={newWorker.workerId} onChange={(e) => setNewWorker({ ...newWorker, workerId: e.target.value.toUpperCase() })} required />
-                                <input placeholder="Full Name" value={newWorker.name} onChange={(e) => setNewWorker({ ...newWorker, name: e.target.value })} required />
-                                <input placeholder="Initial PIN" value={newWorker.pin} onChange={(e) => setNewWorker({ ...newWorker, pin: e.target.value })} required />
-                                <button type="submit" className="btn btn-primary">Add Worker</button>
-                            </form>
-
-                            <div className="table-wrapper">
-                                <table>
-                                    <thead><tr><th>Worker ID</th><th>Name</th><th>Status</th><th>Requires Reset</th><th>Actions</th></tr></thead>
-                                    <tbody>
-                                        {workers.map((w) => (
-                                            <tr key={w.id}>
-                                                {editingId === w.id ? (
-                                                    <>
-                                                        <td><input value={editData.workerId} onChange={(e) => setEditData({ ...editData, workerId: e.target.value.toUpperCase() })} /></td>
-                                                        <td><input value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} /></td>
-                                                        <td>-</td><td>-</td>
-                                                        <td className="action-btns">
-                                                            <button className="btn btn-tiny btn-primary" onClick={() => saveEdit(w.id)}>Save</button>
-                                                            <button className="btn btn-tiny btn-outline" onClick={() => setEditingId(null)}>Cancel</button>
-                                                        </td>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <td style={{ fontFamily: 'monospace' }}>{w.workerId}</td>
-                                                        <td style={{ fontWeight: 500 }}>{w.name}</td>
-                                                        <td><span className={`badge ${w.isActive ? 'badge-green' : 'badge-red'}`}>{w.isActive ? 'Active' : 'Inactive'}</span></td>
-                                                        <td>{w.requiresPinReset ? '⚠️ Yes' : '✅ No'}</td>
-                                                        <td className="action-btns">
-                                                            <button className="btn btn-tiny btn-outline" onClick={() => startEdit(w)}>Edit</button>
-                                                            <button className="btn btn-tiny" onClick={() => handleToggleWorker(w.id)}>{w.isActive ? 'Deact.' : 'Act.'}</button>
-                                                            <button className="btn btn-tiny btn-outline" onClick={() => handleResetPin(w.id)}>Reset PIN</button>
-                                                            <button className="btn btn-tiny btn-danger" onClick={() => handleDeleteWorker(w.id)}>Delete</button>
-                                                        </td>
-                                                    </>
-                                                )}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* ── SETTINGS TAB ── */}
-                    {activeTab === 'settings' && (
-                        <div className="settings-grid">
-                            {/* Notification Timer Card */}
-                            <div className="card" style={{ gridColumn: '1 / -1' }}>
-                                <h3>🔔 Notification Timer</h3>
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '20px' }}>
-                                    Set the time when absent workers will automatically receive a push notification reminder.
-                                </p>
-                                <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
-                                    <div className="form-group" style={{ marginBottom: 0, flex: '0 0 auto' }}>
-                                        <label>Daily Reminder Time</label>
-                                        <input
-                                            type="time"
-                                            value={notificationTime}
-                                            onChange={(e) => setNotificationTime(e.target.value)}
-                                            style={{ width: '180px', fontSize: '18px', padding: '14px 16px' }}
-                                        />
-                                    </div>
-                                    <div style={{ display: 'flex', gap: '10px' }}>
-                                        <button className="btn btn-primary" onClick={handleSaveSettings} type="button">
-                                            💾 Save Timer
-                                        </button>
-                                        <button className="btn btn-outline" onClick={handleTestNotification} type="button">
-                                            🧪 Send Test Notification
-                                        </button>
-                                    </div>
-                                </div>
-                                <div style={{ marginTop: '16px', padding: '12px 16px', background: 'rgba(59, 130, 246, 0.08)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(59, 130, 246, 0.15)' }}>
-                                    <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                                        ⏰ Current schedule: <strong style={{ color: 'var(--accent-blue)' }}>{notificationTime || '08:30'}</strong> daily
-                                        — Workers who haven't punched in by this time will receive a push notification.
+                        {/* ── SETTINGS TAB ── */}
+                        {activeTab === 'settings' && (
+                            <div className="settings-grid">
+                                {/* Notification Timer Card */}
+                                <div className="card" style={{ gridColumn: '1 / -1' }}>
+                                    <h3>🔔 Notification Timer</h3>
+                                    <p style={{ color: 'var(--text-secondary)', fontSize: '14px', marginBottom: '20px' }}>
+                                        Set the time when absent workers will automatically receive a push notification reminder.
                                     </p>
+                                    <div className="settings-controls">
+                                        <div className="form-group" style={{ marginBottom: 0, flex: '0 0 auto' }}>
+                                            <label>Daily Reminder Time</label>
+                                            <input
+                                                type="time"
+                                                value={notificationTime}
+                                                onChange={(e) => setNotificationTime(e.target.value)}
+                                                style={{ width: '180px', fontSize: '18px', padding: '14px 16px' }}
+                                            />
+                                        </div>
+                                        <div className="settings-btns">
+                                            <button className="btn btn-primary" onClick={handleSaveSettings} type="button">
+                                                💾 Save Timer
+                                            </button>
+                                            <button className="btn btn-outline" onClick={handleTestNotification} type="button">
+                                                🧪 Send Test Notification
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div style={{ marginTop: '16px', padding: '12px 16px', background: 'rgba(59, 130, 246, 0.08)', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(59, 130, 246, 0.15)' }}>
+                                        <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                                            ⏰ Current schedule: <strong style={{ color: 'var(--accent-blue)' }}>{notificationTime || '08:30'}</strong> daily
+                                            — Workers who haven't punched in by this time will receive a push notification.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <div className="card">
+                                    <h3>⚙️ Attendance Categories</h3>
+                                    <form onSubmit={handleSaveSettings}>
+                                        <div className="form-group">
+                                            <label>Worker Roles / Categories</label>
+                                            <div className="category-tags">
+                                                {categories.map((cat) => (
+                                                    <span key={cat} className="tag">{cat} <button type="button" onClick={() => removeCategory(cat)}>×</button></span>
+                                                ))}
+                                            </div>
+                                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '8px' }}>
+                                                <input placeholder="Add new role" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
+                                                <button type="button" className="btn btn-sm btn-outline" onClick={addCategory}>Add</button>
+                                            </div>
+                                        </div>
+                                        <button type="submit" className="btn btn-primary" style={{ marginTop: '16px' }}>Save Categories</button>
+                                    </form>
+                                </div>
+
+                                <div className="card">
+                                    <h3>🛡️ Manager Profile</h3>
+                                    <form onSubmit={handleSaveProfile}>
+                                        <div className="form-group">
+                                            <label>Username</label>
+                                            <input value={profileData.username} onChange={(e) => setProfileData({ ...profileData, username: e.target.value })} />
+                                        </div>
+                                        <div className="form-group">
+                                            <label>New PIN (Leave blank to keep current)</label>
+                                            <input type="password" value={profileData.rawPin} onChange={(e) => setProfileData({ ...profileData, rawPin: e.target.value.replace(/\D/g, '') })} placeholder="••••••" maxLength={6} inputMode="numeric" />
+                                        </div>
+                                        <button type="submit" className="btn btn-primary">Update Profile</button>
+                                    </form>
                                 </div>
                             </div>
-
-                            <div className="card">
-                                <h3>⚙️ Attendance Categories</h3>
-                                <form onSubmit={handleSaveSettings}>
-                                    <div className="form-group">
-                                        <label>Worker Roles / Categories</label>
-                                        <div className="category-tags">
-                                            {categories.map((cat) => (
-                                                <span key={cat} className="tag">{cat} <button type="button" onClick={() => removeCategory(cat)}>×</button></span>
-                                            ))}
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '8px' }}>
-                                            <input placeholder="Add new role" value={newCategory} onChange={(e) => setNewCategory(e.target.value)} />
-                                            <button type="button" className="btn btn-sm btn-outline" onClick={addCategory}>Add</button>
-                                        </div>
-                                    </div>
-                                    <button type="submit" className="btn btn-primary" style={{ marginTop: '16px' }}>Save Categories</button>
-                                </form>
-                            </div>
-
-                            <div className="card">
-                                <h3>🛡️ Manager Profile</h3>
-                                <form onSubmit={handleSaveProfile}>
-                                    <div className="form-group">
-                                        <label>Username</label>
-                                        <input value={profileData.username} onChange={(e) => setProfileData({ ...profileData, username: e.target.value })} />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>New PIN (Leave blank to keep current)</label>
-                                        <input type="password" value={profileData.rawPin} onChange={(e) => setProfileData({ ...profileData, rawPin: e.target.value.replace(/\D/g, '') })} placeholder="••••••" maxLength={6} inputMode="numeric" />
-                                    </div>
-                                    <button type="submit" className="btn btn-primary">Update Profile</button>
-                                </form>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </main>
+                        )}
+                    </div>
+                </main>
+            </div>
         </div>
     );
 }
