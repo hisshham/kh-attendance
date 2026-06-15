@@ -3,12 +3,16 @@ import { useAuth } from '../context/AuthContext';
 import api from '../services/api';
 import { getSocket } from '../services/socket';
 
+function getISTDate() {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+}
+
 export default function ManagerDashboard() {
     const { user, logout, token } = useAuth();
     const [activeTab, setActiveTab] = useState('overview');
 
     // Data State
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const [selectedDate, setSelectedDate] = useState(getISTDate());
     const [attendances, setAttendances] = useState([]);
     const [allWorkers, setAllWorkers] = useState([]);
     const [workers, setWorkers] = useState([]);

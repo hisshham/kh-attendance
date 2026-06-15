@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { verifyToken, workerOnly } = require('../middleware/auth');
+const { getISTDate } = require('../utils/date');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -10,7 +11,7 @@ router.use(verifyToken, workerOnly);
 // GET /api/worker/attendance/today — check if already punched in + get categories
 router.get('/attendance/today', async (req, res) => {
     try {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getISTDate();
 
         const attendance = await prisma.attendance.findUnique({
             where: { workerId_date: { workerId: req.user.id, date: today } },
@@ -35,7 +36,7 @@ router.post('/attendance', async (req, res) => {
         const { category } = req.body;
         if (!category) return res.status(400).json({ error: 'Category is required' });
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = getISTDate();
 
         const existing = await prisma.attendance.findUnique({
             where: { workerId_date: { workerId: req.user.id, date: today } },

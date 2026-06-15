@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const webpush = require('web-push');
+const { getISTDate, getISTTime } = require('./utils/date');
 
 async function sendDailyNotifications() {
     try {
@@ -16,7 +17,7 @@ async function sendDailyNotifications() {
         webpush.setVapidDetails('mailto:admin@workcomm.local', settings.vapidPublic, settings.vapidPrivate);
 
         // Find workers who haven't punched in today
-        const today = new Date().toISOString().split('T')[0];
+        const today = getISTDate();
 
         // Who has punched in?
         const todaysPunches = await prisma.attendance.findMany({
@@ -77,8 +78,8 @@ function startNotificationCron() {
             const targetHour = parseInt(timeParts[0]);
             const targetMin = parseInt(timeParts[1]);
 
-            const now = new Date();
-            if (now.getHours() === targetHour && now.getMinutes() === targetMin) {
+            const { hour, minute } = getISTTime();
+            if (hour === targetHour && minute === targetMin) {
                 console.log(`[CRON] ⏰ It's ${settings.notificationTime} — triggering daily notifications!`);
                 sendDailyNotifications();
             }

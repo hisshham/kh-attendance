@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcrypt');
 const { PrismaClient } = require('@prisma/client');
 const { verifyToken, managerOnly } = require('../middleware/auth');
+const { getISTDate } = require('../utils/date');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -179,7 +180,7 @@ router.put('/profile', async (req, res) => {
 // GET /api/manager/attendance?date=YYYY-MM-DD
 router.get('/attendance', async (req, res) => {
     try {
-        const dateStr = req.query.date || new Date().toISOString().split('T')[0];
+        const dateStr = req.query.date || getISTDate();
 
         const attendances = await prisma.attendance.findMany({
             where: { date: dateStr },
@@ -203,7 +204,7 @@ router.get('/attendance', async (req, res) => {
 // GET /api/manager/attendance/export?date=YYYY-MM-DD — CSV export
 router.get('/attendance/export', async (req, res) => {
     try {
-        const dateStr = req.query.date || new Date().toISOString().split('T')[0];
+        const dateStr = req.query.date || getISTDate();
 
         const allWorkers = await prisma.worker.findMany({
             where: { isActive: true },
@@ -255,7 +256,7 @@ router.post('/send-test-notification', async (req, res) => {
         // Find workers who haven't punched in today
         const startOfDay = new Date();
         startOfDay.setHours(0, 0, 0, 0);
-        const today = new Date().toISOString().split('T')[0];
+        const today = getISTDate();
 
         const todaysPunches = await prisma.attendance.findMany({
             where: { date: today },
