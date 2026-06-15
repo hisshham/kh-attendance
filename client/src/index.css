@@ -1007,6 +1007,8 @@ tr:hover td {
   height: 100vh;
   font-size: 16px;
   color: var(--text-secondary);
+}
+
 /* ===== Mobile Scroll Wrapper ===== */
 .mobile-scroll-wrapper {
   display: flex;
