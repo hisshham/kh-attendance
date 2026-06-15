@@ -4,19 +4,19 @@
 
 [[redirects]]
   from = "/auth/*"
-  to = "https://kh-msg-server.onrender.com/auth/:splat"
+  to = "https://kh-attendance.onrender.com/auth/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/api/*"
-  to = "https://kh-msg-server.onrender.com/api/:splat"
+  to = "https://kh-attendance.onrender.com/api/:splat"
   status = 200
   force = true
 
 [[redirects]]
   from = "/socket.io/*"
-  to = "https://kh-msg-server.onrender.com/socket.io/:splat"
+  to = "https://kh-attendance.onrender.com/socket.io/:splat"
   status = 200
   force = true
 
