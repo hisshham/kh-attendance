@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Worker {
+  id               Int          @id @default(autoincrement())
+  workerId         String       @unique @map("worker_id")
+  name             String
+  pinHash          String       @map("pin_hash")
+  requiresPinReset Boolean      @default(true) @map("requires_pin_reset")
+  isActive         Boolean      @default(true) @map("is_active")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  attendances      Attendance[]
+  subscriptions    PushSubscription[]
+
+  @@map("workers")
+}
+
+model Manager {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  pinHash   String   @map("pin_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("managers")
+}
+
+model SystemSettings {
+  id               Int    @id @default(autoincrement())
+  categories       String // JSON array stored as string
+  notificationTime String @map("notification_time")
+  vapidPublic      String? @map("vapid_public")
+  vapidPrivate     String? @map("vapid_private")
+
+  @@map("system_settings")
+}
+
+model Attendance {
+  id        Int      @id @default(autoincrement())
+  workerId  Int      @map("worker_id")
+  category  String
+  date      String   // "YYYY-MM-DD" string
+  timestamp DateTime @default(now())
+  worker    Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, date])
+  @@map("attendances")
+}
+
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  workerId  Int
+  worker    Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+}

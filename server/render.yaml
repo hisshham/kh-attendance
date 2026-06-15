@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: kh-msg-server
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx prisma generate && npx prisma db push && node prisma/seed.js
+    startCommand: node src/index.js
+    envVars:
+      - key: DATABASE_URL
+        value: file:./prisma/dev.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: REFRESH_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: CORS_ORIGIN
+        value: https://kh-msg.netlify.app
+      - key: MANAGER_DEFAULT_PIN
+        value: "123456"
+    disk:
+      name: sqlite-data
+      mountPath: /opt/render/project/src/prisma
+      sizeGB: 1

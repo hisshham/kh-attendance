@@ -1,0 +1,4 @@
+# Netlify SPA redirects (fallback if netlify.toml isn't picked up)
+/auth/*  https://kh-msg-server.onrender.com/auth/:splat  200
+/api/*   https://kh-msg-server.onrender.com/api/:splat   200
+/*       /index.html                                      200
