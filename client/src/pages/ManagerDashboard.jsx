@@ -10,6 +10,7 @@ function getISTDate() {
 export default function ManagerDashboard() {
     const { user, logout, token } = useAuth();
     const [activeTab, setActiveTab] = useState('overview');
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Data State
     const [selectedDate, setSelectedDate] = useState(getISTDate());
@@ -164,26 +165,32 @@ export default function ManagerDashboard() {
     return (
         <div className="layout-enterprise">
             {/* Sidebar */}
-            <aside className="sidebar">
+            <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
                 <div className="sidebar-header">
-                    <h2>Attendance</h2>
-                    <span className="badge badge-manager">Admin</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <h2>Attendance</h2>
+                        <span className="badge badge-manager">Admin</span>
+                    </div>
+                    <button className="mobile-menu-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+                        {isMobileMenuOpen ? '✕' : '☰'}
+                    </button>
                 </div>
 
-                <nav className="sidebar-nav">
-                    <button className={`nav-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>
-                        📊 Overview
-                    </button>
-                    <button className={`nav-btn ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => setActiveTab('attendance')}>
-                        📋 Daily Logs
-                    </button>
-                    <button className={`nav-btn ${activeTab === 'workers' ? 'active' : ''}`} onClick={() => setActiveTab('workers')}>
-                        👥 Workers
-                    </button>
-                    <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>
-                        ⚙️ Settings
-                    </button>
-                </nav>
+                <div className={`sidebar-content ${isMobileMenuOpen ? 'open' : ''}`}>
+                    <nav className="sidebar-nav">
+                        <button className={`nav-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }}>
+                            📊 Overview
+                        </button>
+                        <button className={`nav-btn ${activeTab === 'attendance' ? 'active' : ''}`} onClick={() => { setActiveTab('attendance'); setIsMobileMenuOpen(false); }}>
+                            📋 Daily Logs
+                        </button>
+                        <button className={`nav-btn ${activeTab === 'workers' ? 'active' : ''}`} onClick={() => { setActiveTab('workers'); setIsMobileMenuOpen(false); }}>
+                            👥 Workers
+                        </button>
+                        <button className={`nav-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => { setActiveTab('settings'); setIsMobileMenuOpen(false); }}>
+                            ⚙️ Settings
+                        </button>
+                    </nav>
 
                 <div className="sidebar-footer">
                     <div className="user-info">
@@ -194,6 +201,7 @@ export default function ManagerDashboard() {
                         </div>
                     </div>
                     <button className="btn btn-outline btn-full" onClick={logout}>Logout</button>
+                </div>
                 </div>
             </aside>
 

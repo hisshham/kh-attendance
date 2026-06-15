@@ -1010,6 +1010,17 @@ tr:hover td {
 }
 
 /* ===== Mobile Responsiveness ===== */
+.mobile-menu-btn {
+  display: none;
+}
+
+.sidebar-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  justify-content: space-between;
+}
+
 @media (max-width: 800px) {
   /* Manager Dashboard Layout */
   .app-container {
@@ -1031,7 +1042,31 @@ tr:hover td {
 
   .sidebar-header {
     margin-bottom: 0;
-    text-align: center;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+  }
+
+  .mobile-menu-btn {
+    display: block;
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: var(--text-primary);
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .sidebar-content {
+    display: none;
+  }
+
+  .sidebar-content.open {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
   }
 
   .nav-menu {
