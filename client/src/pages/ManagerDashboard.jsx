@@ -81,10 +81,11 @@ export default function ManagerDashboard() {
             setNewWorker({ workerId: '', name: '', pin: '123456', category: '' });
             setMessage('✅ Worker added');
             loadWorkers();
+            loadAttendance();
         } catch (err) { setMessage('❌ ' + (err.response?.data?.error || 'Failed')); }
     }
     async function handleToggleWorker(id) {
-        try { await api.patch(`/api/manager/workers/${id}/toggle`); loadWorkers(); } catch (err) { }
+        try { await api.patch(`/api/manager/workers/${id}/toggle`); loadWorkers(); loadAttendance(); } catch (err) { }
     }
     async function handleDeleteWorker(id) {
         if (!confirm('Permanently remove this worker and all their attendance history?')) return;
@@ -92,6 +93,7 @@ export default function ManagerDashboard() {
             await api.delete(`/api/manager/workers/${id}`);
             setMessage('✅ Worker deleted');
             loadWorkers();
+            loadAttendance();
         } catch (err) { alert('Failed to delete worker'); }
     }
     function startEdit(w) {
@@ -101,7 +103,7 @@ export default function ManagerDashboard() {
     async function saveEdit(id) {
         try {
             await api.put(`/api/manager/workers/${id}`, editData);
-            setEditingId(null); setMessage('✅ Worker updated'); loadWorkers();
+            setEditingId(null); setMessage('✅ Worker updated'); loadWorkers(); loadAttendance();
         } catch (err) { alert('Failed to update worker'); }
     }
     async function handleResetPin(id) {
