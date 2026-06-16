@@ -7,11 +7,14 @@ const hasPushSupport = typeof window !== 'undefined' && 'Notification' in window
 
 export default function WorkerDashboard() {
     const { user, logout } = useAuth();
-    const [categories, setCategories] = useState([]);
     const [todayAttendance, setTodayAttendance] = useState(null);
-    const [selectedCategory, setSelectedCategory] = useState('');
+    const [workerInfo, setWorkerInfo] = useState(null);
+    const [editDeadlineEnabled, setEditDeadlineEnabled] = useState(false);
+    const [editDeadlineTime, setEditDeadlineTime] = useState(null);
+    const [serverTime, setServerTime] = useState('');
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [editing, setEditing] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [pushEnabled, setPushEnabled] = useState(hasPushSupport && Notification.permission === 'granted');
@@ -19,7 +22,6 @@ export default function WorkerDashboard() {
     useEffect(() => {
         loadToday();
 
-        // Register this worker as online via socket
         const socket = getSocket();
         socket.emit('worker_online', user?.workerId);
 
@@ -45,25 +47,55 @@ export default function WorkerDashboard() {
 
     async function setupPush() {
         try {
-            if (!hasPushSupport) {
-                alert('Push notifications are not supported on this device. On iPhone, you must first "Add to Home Screen" from Safari.');
-                return;
-            }
+            if (!hasPushSupport) return;
             const reg = await navigator.serviceWorker.ready;
             const res = await api.get('/api/push/vapid-key');
-            if (!res.data.publicKey) {
-                alert('Server returned empty VAPID key. Please try again in a moment.');
-                return;
+            if (!res.data.publicKey) return;
+
+            // Handle VAPID key mismatch: unsubscribe old, then subscribe new
+            let sub = await reg.pushManager.getSubscription();
+            if (sub) {
+                try {
+                    // Try to use existing subscription
+                    await api.post('/api/push/subscribe', sub);
+                    setPushEnabled(true);
+                    return;
+                } catch {
+                    // If existing sub fails, unsubscribe and create new
+                    await sub.unsubscribe();
+                    await api.post('/api/push/unsubscribe', { endpoint: sub.endpoint });
+                }
             }
-            const sub = await reg.pushManager.subscribe({
+
+            sub = await reg.pushManager.subscribe({
                 userVisibleOnly: true,
-                applicationServerKey: await urlBase64ToUint8Array(res.data.publicKey)
+                applicationServerKey: await urlBase64ToUint8Array(res.data.publicKey),
             });
             await api.post('/api/push/subscribe', sub);
             setPushEnabled(true);
         } catch (err) {
             console.error('Push error:', err);
-            alert('Push notification setup failed: ' + (err.message || String(err)));
+            // Handle applicationServerKey mismatch specifically
+            if (err.message && err.message.includes('applicationServerKey')) {
+                try {
+                    const reg = await navigator.serviceWorker.ready;
+                    const existingSub = await reg.pushManager.getSubscription();
+                    if (existingSub) {
+                        await existingSub.unsubscribe();
+                        await api.post('/api/push/unsubscribe', { endpoint: existingSub.endpoint });
+                    }
+                    // Retry subscription
+                    const res = await api.get('/api/push/vapid-key');
+                    const newSub = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: await urlBase64ToUint8Array(res.data.publicKey),
+                    });
+                    await api.post('/api/push/subscribe', newSub);
+                    setPushEnabled(true);
+                } catch (retryErr) {
+                    console.error('Push retry failed:', retryErr);
+                }
+            }
         }
     }
 
@@ -87,8 +119,11 @@ export default function WorkerDashboard() {
     async function loadToday() {
         try {
             const res = await api.get('/api/worker/attendance/today');
-            setCategories(res.data.categories || []);
             setTodayAttendance(res.data.attendance);
+            setWorkerInfo(res.data.worker);
+            setEditDeadlineEnabled(res.data.editDeadlineEnabled);
+            setEditDeadlineTime(res.data.editDeadlineTime);
+            setServerTime(res.data.currentISTTime);
         } catch (err) {
             setError('Failed to load data');
         } finally {
@@ -96,122 +131,176 @@ export default function WorkerDashboard() {
         }
     }
 
-    async function handleSubmit(e) {
-        e.preventDefault();
-        if (!selectedCategory) {
-            setError('Please select a category');
-            return;
-        }
+    async function handleSubmit(isPresent) {
         setSubmitting(true);
         setError('');
         setMessage('');
-
         try {
-            await api.post('/api/worker/attendance', { category: selectedCategory });
-            setMessage('✅ Attendance marked successfully!');
+            await api.post('/api/worker/attendance', { isPresent });
+            setMessage(isPresent ? '✅ Marked as Present!' : '❌ Marked as Absent');
+            setEditing(false);
             loadToday();
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to submit attendance');
+            setError(err.response?.data?.error || 'Failed to submit');
         } finally {
             setSubmitting(false);
         }
     }
 
-    // Interactive animated greetings based on time
+    async function handleUpdate(isPresent) {
+        setSubmitting(true);
+        setError('');
+        setMessage('');
+        try {
+            await api.patch('/api/worker/attendance/update', { isPresent });
+            setMessage(isPresent ? '✅ Updated to Present!' : '❌ Updated to Absent');
+            setEditing(false);
+            loadToday();
+        } catch (err) {
+            setError(err.response?.data?.error || 'Failed to update');
+        } finally {
+            setSubmitting(false);
+        }
+    }
+
+    // Check if editing is allowed based on deadline
+    function canEdit() {
+        if (!editDeadlineEnabled) return true;
+        if (!editDeadlineTime || !serverTime) return true;
+        const [dh, dm] = editDeadlineTime.split(':').map(Number);
+        const [sh, sm] = serverTime.split(':').map(Number);
+        return (sh * 60 + sm) < (dh * 60 + dm);
+    }
+
     const hour = new Date().getHours();
     const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
+    const isEditAllowed = canEdit();
 
     if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><div className="loader"></div></div>;
 
     return (
-        <div className="mobile-scroll-wrapper" style={{ alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ width: '100%', maxWidth: '800px', display: 'flex', flexDirection: 'column', minHeight: '100vh', padding: '24px 16px' }}>
-                <header className="dashboard-header" style={{ margin: '0 0 24px', position: 'relative', overflow: 'hidden' }}>
-                    <div style={{ position: 'relative', zIndex: 2 }}>
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '4px', fontSize: '14px', textTransform: 'uppercase', letterSpacing: '1px' }}>{greeting},</p>
-                        <h1 style={{ fontSize: '28px', marginBottom: '8px' }}>{user?.name || user?.workerId}</h1>
-                        <span className="badge badge-green" style={{ background: 'var(--bg-primary)' }}>ID: {user?.workerId}</span>
+        <div className="worker-container">
+            <div className="worker-card-main">
+                {/* Header */}
+                <div className="worker-header">
+                    <p className="worker-greeting">{greeting}</p>
+                    <h1 className="worker-name">{user?.name || user?.workerId}</h1>
+                    <div className="worker-header-actions">
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span className="badge badge-amber">ID: {user?.workerId}</span>
+                            {workerInfo?.category && (
+                                <span className="badge badge-teal">{workerInfo.category}</span>
+                            )}
+                        </div>
+                        <button className="btn btn-sm btn-outline" onClick={logout}>Logout</button>
                     </div>
-                    <button className="btn btn-outline" style={{ position: 'relative', zIndex: 2, background: 'rgba(0,0,0,0.3)' }} onClick={logout}>⏏ Logout</button>
-                    {/* Abstract design elements inside header */}
-                    <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, background: 'var(--accent-blue)', opacity: 0.1, borderRadius: '50%', filter: 'blur(30px)' }}></div>
-                    <div style={{ position: 'absolute', bottom: -50, right: 100, width: 150, height: 150, background: 'var(--accent-green)', opacity: 0.1, borderRadius: '50%', filter: 'blur(30px)' }}></div>
-                </header>
+                </div>
 
+                {/* Push notification banner */}
                 {!pushEnabled && hasPushSupport && (
                     <div className="push-banner">
                         <div>
-                            <strong style={{ color: 'var(--accent-blue)' }}>🔔 Enable Daily Reminders</strong>
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Get notified when it's time to log attendance.</p>
+                            <strong style={{ color: 'var(--accent-amber)' }}>🔔 Enable Reminders</strong>
+                            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Get notified when it's time to log attendance.</p>
                         </div>
                         <button className="btn btn-sm btn-primary" onClick={requestPush}>Enable</button>
                     </div>
                 )}
-
                 {!hasPushSupport && (
-                    <div className="push-banner" style={{ borderColor: 'rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.1)' }}>
+                    <div className="push-banner" style={{ borderColor: 'rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.06)' }}>
                         <div>
                             <strong style={{ color: 'var(--accent-red)' }}>📱 iPhone Notice</strong>
-                            <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>To receive notifications, open this page in Safari → tap Share → "Add to Home Screen" → open from home screen.</p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>To receive notifications: Safari → Share → "Add to Home Screen" → open from home screen.</p>
                         </div>
                     </div>
                 )}
 
-                <main style={{ flex: 1 }}>
-                    <div className="card" style={{ padding: '32px 24px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px' }}>
-                        <h2 style={{ fontSize: '22px' }}>📋 Daily Attendance Entry</h2>
-                        <div className="date-display" style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>
-                            {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                {/* Messages */}
+                {message && <div className="success-msg" style={{ marginBottom: '16px', textAlign: 'center' }}>{message}</div>}
+                {error && <div className="error-msg" style={{ textAlign: 'center' }}>{error}</div>}
+
+                {/* Main attendance area */}
+                {todayAttendance && !editing ? (
+                    /* Already marked — show status */
+                    <div className="attendance-status" style={{ animation: 'fadeInUp 0.4s ease-out' }}>
+                        <div className="status-icon">
+                            {todayAttendance.isPresent ? '✅' : '❌'}
+                        </div>
+                        <h2 className="status-title" style={{ color: todayAttendance.isPresent ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                            {todayAttendance.isPresent ? 'You are Present Today' : 'You are Absent Today'}
+                        </h2>
+
+                        <div className="status-details">
+                            <div className="status-row">
+                                <span className="status-row-label">Status</span>
+                                <span className="status-row-value" style={{ color: todayAttendance.isPresent ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                                    {todayAttendance.isPresent ? 'Present' : 'Absent'}
+                                </span>
+                            </div>
+                            <div className="status-row">
+                                <span className="status-row-label">Category</span>
+                                <span className="status-row-value">{todayAttendance.category}</span>
+                            </div>
+                            <div className="status-row">
+                                <span className="status-row-label">Logged At</span>
+                                <span className="status-row-value">
+                                    {new Date(todayAttendance.timestamp).toLocaleTimeString('en-IN', { hour12: true })}
+                                </span>
+                            </div>
                         </div>
 
-                        {todayAttendance ? (
-                            <div className="success-box" style={{ width: '100%', maxWidth: '500px', animation: 'fadeInUp 0.5s ease-out' }}>
-                                <center>
-                                    <div style={{ fontSize: '64px', marginBottom: '16px', lineHeight: 1 }}>✅</div>
-                                    <h3 style={{ justifyContent: 'center', color: 'white' }}>Punch successful</h3>
-                                </center>
-                                <div style={{ background: 'var(--bg-input)', padding: '20px', borderRadius: 'var(--radius-md)', marginTop: '24px' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '12px', borderBottom: '1px solid var(--border-color)', marginBottom: '12px' }}>
-                                        <span style={{ color: 'var(--text-secondary)' }}>Current Role</span>
-                                        <strong>{todayAttendance.category}</strong>
-                                    </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                                        <span style={{ color: 'var(--text-secondary)' }}>Time Logged</span>
-                                        <strong>{new Date(todayAttendance.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</strong>
-                                    </div>
-                                </div>
-                                <p style={{ textAlign: 'center', marginTop: '24px', color: 'var(--text-muted)', fontSize: '14px' }}>You have successfully checked in for the day. You may close this window.</p>
-                            </div>
+                        {isEditAllowed ? (
+                            <button className="edit-attendance-btn" onClick={() => setEditing(true)} disabled={submitting}>
+                                ✏️ Edit My Response
+                            </button>
                         ) : (
-                            <form onSubmit={handleSubmit} style={{ width: '100%' }}>
-                                <p style={{ marginBottom: '16px', color: 'var(--text-secondary)' }}>Select your assigned role for the day:</p>
-                                <div className="category-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', margin: '0 0 32px' }}>
-                                    {categories.map((cat) => (
-                                        <button
-                                            key={cat}
-                                            type="button"
-                                            className={`category-btn ${selectedCategory === cat ? 'active' : ''}`}
-                                            onClick={() => setSelectedCategory(cat)}
-                                            style={{
-                                                padding: '24px 16px',
-                                                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px'
-                                            }}
-                                        >
-                                            <span style={{ fontSize: '24px' }}>{cat.toLowerCase().includes('skill') ? '🛠️' : '👷'}</span>
-                                            {cat}
-                                        </button>
-                                    ))}
-                                </div>
-
-                                {error && <div className="error-msg" style={{ width: '100%', maxWidth: '500px', margin: '0 auto 20px' }}>{error}</div>}
-
-                                <button type="submit" className="btn btn-primary btn-full" style={{ padding: '20px', fontSize: '18px', maxWidth: '400px' }} disabled={submitting || !selectedCategory}>
-                                    {submitting ? 'Submitting...' : selectedCategory ? `Punch In as ${selectedCategory}` : 'Select a Role'}
-                                </button>
-                            </form>
+                            <div className="locked-msg">
+                                🔒 Editing locked after {editDeadlineTime}
+                            </div>
                         )}
                     </div>
-                </main>
+                ) : (
+                    /* Not marked yet OR editing */
+                    <div className="attendance-question" style={{ animation: 'fadeInUp 0.4s ease-out' }}>
+                        <h2>{editing ? '✏️ Change Your Response' : '📋 Daily Attendance'}</h2>
+                        <p className="attendance-date">
+                            {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                        </p>
+
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '16px', fontWeight: '600' }}>
+                            Are you present today?
+                        </p>
+
+                        <div className="yes-no-buttons">
+                            <button
+                                className="btn-yes"
+                                onClick={() => editing ? handleUpdate(true) : handleSubmit(true)}
+                                disabled={submitting}
+                            >
+                                <span className="btn-icon">✓</span>
+                                YES
+                            </button>
+                            <button
+                                className="btn-no"
+                                onClick={() => editing ? handleUpdate(false) : handleSubmit(false)}
+                                disabled={submitting}
+                            >
+                                <span className="btn-icon">✗</span>
+                                NO
+                            </button>
+                        </div>
+
+                        {editing && (
+                            <button
+                                className="btn btn-outline btn-full"
+                                style={{ marginTop: '16px' }}
+                                onClick={() => setEditing(false)}
+                            >
+                                Cancel
+                            </button>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

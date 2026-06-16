@@ -29,9 +29,9 @@ export default function ManagerLogin() {
         <div className="login-container">
             <div className="login-card">
                 <div className="logo">
-                    <h1>Attendance</h1>
+                    <h1>KH Attendance</h1>
                     <p>Management Console</p>
-                    <span className="role-badge manager">Manager Login</span>
+                    <span className="role-badge manager">Master Login</span>
                 </div>
 
                 {error && <div className="error-msg">{error}</div>}
@@ -39,30 +39,17 @@ export default function ManagerLogin() {
                 <form onSubmit={handleSubmit}>
                     <div className="form-group">
                         <label>Username</label>
-                        <input
-                            type="text"
-                            placeholder="manager"
-                            value={username}
+                        <input type="text" placeholder="manager" value={username}
                             onChange={(e) => setUsername(e.target.value)}
-                            autoComplete="username"
-                            required
-                            autoFocus
-                        />
+                            autoComplete="username" required autoFocus />
                     </div>
                     <div className="form-group">
                         <label>PIN</label>
-                        <input
-                            type="password"
-                            placeholder="••••••"
-                            value={pin}
+                        <input type="password" placeholder="••••••" value={pin}
                             onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                            maxLength={6}
-                            inputMode="numeric"
-                            autoComplete="current-password"
-                            required
-                        />
+                            maxLength={6} inputMode="numeric" autoComplete="current-password" required />
                     </div>
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                    <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
                         {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>

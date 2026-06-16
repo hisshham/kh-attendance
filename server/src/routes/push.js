@@ -9,7 +9,12 @@ const { verifyToken, workerOnly } = require('../middleware/auth');
 async function ensureVapidKeys() {
     let settings = await prisma.systemSettings.findFirst();
     if (!settings) {
-        settings = await prisma.systemSettings.create({ data: { categories: '["Fully Skilled","Semi Skilled","Unskilled"]' } });
+        settings = await prisma.systemSettings.create({
+            data: {
+                categories: '["Fully Skilled","Semi Skilled","Unskilled"]',
+                notificationTime: '08:30',
+            },
+        });
     }
 
     if (!settings.vapidPublic || !settings.vapidPrivate) {
@@ -18,8 +23,8 @@ async function ensureVapidKeys() {
             where: { id: settings.id },
             data: {
                 vapidPublic: vapidKeys.publicKey,
-                vapidPrivate: vapidKeys.privateKey
-            }
+                vapidPrivate: vapidKeys.privateKey,
+            },
         });
     }
 
@@ -45,16 +50,21 @@ router.get('/vapid-key', async (req, res) => {
 router.post('/subscribe', verifyToken, workerOnly, async (req, res) => {
     try {
         const subscription = req.body;
-        // Check if endpoint exists
+
+        // Remove any existing subscription for this endpoint (handles VAPID key mismatch)
         const existing = await prisma.pushSubscription.findUnique({
             where: { endpoint: subscription.endpoint }
         });
 
         if (existing) {
-            // Update worker mapping if existing
+            // Update the existing subscription with new keys and worker mapping
             await prisma.pushSubscription.update({
                 where: { id: existing.id },
-                data: { workerId: req.user.id }
+                data: {
+                    workerId: req.user.id,
+                    p256dh: subscription.keys.p256dh,
+                    auth: subscription.keys.auth,
+                },
             });
         } else {
             await prisma.pushSubscription.create({
@@ -62,14 +72,28 @@ router.post('/subscribe', verifyToken, workerOnly, async (req, res) => {
                     workerId: req.user.id,
                     endpoint: subscription.endpoint,
                     p256dh: subscription.keys.p256dh,
-                    auth: subscription.keys.auth
-                }
+                    auth: subscription.keys.auth,
+                },
             });
         }
         res.status(201).json({});
     } catch (err) {
         console.error('Push subscribe error:', err);
         res.status(500).json({ error: 'Failed to subscribe' });
+    }
+});
+
+// POST /api/push/unsubscribe — remove a subscription (used for VAPID key mismatch recovery)
+router.post('/unsubscribe', async (req, res) => {
+    try {
+        const { endpoint } = req.body;
+        if (endpoint) {
+            await prisma.pushSubscription.deleteMany({ where: { endpoint } });
+        }
+        res.json({ ok: true });
+    } catch (err) {
+        console.error('Push unsubscribe error:', err);
+        res.status(500).json({ error: 'Failed to unsubscribe' });
     }
 });
 

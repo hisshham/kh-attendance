@@ -6,13 +6,11 @@ import api from '../services/api';
 export default function WorkerLogin() {
     const { loginWorker } = useAuth();
 
-    // Login state
     const [workerId, setWorkerId] = useState('');
     const [pin, setPin] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // PIN reset state
     const [showPinReset, setShowPinReset] = useState(false);
     const [tempToken, setTempToken] = useState(null);
     const [tempWorker, setTempWorker] = useState(null);
@@ -26,7 +24,6 @@ export default function WorkerLogin() {
 
         try {
             const res = await api.post('/auth/worker/login', { workerId: workerId.trim(), pin });
-
             if (res.data.worker.requiresPinReset) {
                 setTempToken(res.data.accessToken);
                 setTempWorker(res.data.worker);
@@ -46,14 +43,8 @@ export default function WorkerLogin() {
         e.preventDefault();
         setError('');
 
-        if (newPin.length < 4) {
-            setError('PIN must be at least 4 digits');
-            return;
-        }
-        if (newPin !== confirmPin) {
-            setError('PINs do not match');
-            return;
-        }
+        if (newPin.length < 4) { setError('PIN must be at least 4 digits'); return; }
+        if (newPin !== confirmPin) { setError('PINs do not match'); return; }
 
         setLoading(true);
         try {
@@ -62,7 +53,7 @@ export default function WorkerLogin() {
             });
             loginWorker(tempToken, { ...tempWorker, requiresPinReset: false });
         } catch (err) {
-            setError(err.response?.data?.error || 'Failed to update PIN. Try again.');
+            setError(err.response?.data?.error || 'Failed to update PIN.');
         } finally {
             setLoading(false);
         }
@@ -73,44 +64,31 @@ export default function WorkerLogin() {
             <div className="login-container">
                 <div className="login-card">
                     <div className="logo">
-                        <h1>Attendance</h1>
-                        <p>Worker Attendance System</p>
-                        <span className="role-badge worker">Set New PIN</span>
+                        <h1>KH Attendance</h1>
+                        <p>Set Your New PIN</p>
+                        <span className="role-badge worker">Security Setup</span>
                     </div>
 
                     {error && <div className="error-msg">{error}</div>}
 
-                    <p style={{ textAlign: 'center', color: '#94a3b8', marginBottom: '1rem', fontSize: '0.9rem' }}>
-                        For security, you must set a new personal PIN. Do not share this PIN with anyone.
+                    <p style={{ textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '1rem', fontSize: '13px' }}>
+                        For security, set a new personal PIN. Do not share it.
                     </p>
 
                     <form onSubmit={handlePinReset}>
                         <div className="form-group">
                             <label>New Secret PIN</label>
-                            <input
-                                type="password"
-                                placeholder="••••••"
-                                value={newPin}
+                            <input type="password" placeholder="••••••" value={newPin}
                                 onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))}
-                                maxLength={6}
-                                inputMode="numeric"
-                                required
-                                autoFocus
-                            />
+                                maxLength={6} inputMode="numeric" required autoFocus />
                         </div>
                         <div className="form-group">
                             <label>Confirm PIN</label>
-                            <input
-                                type="password"
-                                placeholder="••••••"
-                                value={confirmPin}
+                            <input type="password" placeholder="••••••" value={confirmPin}
                                 onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
-                                maxLength={6}
-                                inputMode="numeric"
-                                required
-                            />
+                                maxLength={6} inputMode="numeric" required />
                         </div>
-                        <button type="submit" className="btn btn-primary" disabled={loading}>
+                        <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
                             {loading ? 'Updating...' : 'Set New PIN & Enter'}
                         </button>
                     </form>
@@ -123,7 +101,7 @@ export default function WorkerLogin() {
         <div className="login-container">
             <div className="login-card">
                 <div className="logo">
-                    <h1>Attendance</h1>
+                    <h1>KH Attendance</h1>
                     <p>Worker Attendance System</p>
                     <span className="role-badge worker">Worker Portal</span>
                 </div>
@@ -133,30 +111,17 @@ export default function WorkerLogin() {
                 <form onSubmit={handleLogin}>
                     <div className="form-group">
                         <label>Worker ID</label>
-                        <input
-                            type="text"
-                            placeholder="e.g. WRK-001"
-                            value={workerId}
+                        <input type="text" placeholder="e.g. WRK-001" value={workerId}
                             onChange={(e) => setWorkerId(e.target.value.toUpperCase())}
-                            autoComplete="username"
-                            required
-                            autoFocus
-                        />
+                            autoComplete="username" required autoFocus />
                     </div>
                     <div className="form-group">
-                        <label>Current PIN</label>
-                        <input
-                            type="password"
-                            placeholder="••••••"
-                            value={pin}
+                        <label>PIN</label>
+                        <input type="password" placeholder="••••••" value={pin}
                             onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-                            maxLength={6}
-                            inputMode="numeric"
-                            autoComplete="current-password"
-                            required
-                        />
+                            maxLength={6} inputMode="numeric" autoComplete="current-password" required />
                     </div>
-                    <button type="submit" className="btn btn-primary" disabled={loading}>
+                    <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
                         {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>

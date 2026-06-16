@@ -12,6 +12,7 @@ model Worker {
   workerId         String       @unique @map("worker_id")
   name             String
   pinHash          String       @map("pin_hash")
+  category         String?      @map("category")
   requiresPinReset Boolean      @default(true) @map("requires_pin_reset")
   isActive         Boolean      @default(true) @map("is_active")
   createdAt        DateTime     @default(now()) @map("created_at")
@@ -31,11 +32,16 @@ model Manager {
 }
 
 model SystemSettings {
-  id               Int    @id @default(autoincrement())
-  categories       String // JSON array stored as string
-  notificationTime String @map("notification_time")
-  vapidPublic      String? @map("vapid_public")
-  vapidPrivate     String? @map("vapid_private")
+  id                  Int     @id @default(autoincrement())
+  categories          String  // JSON array stored as string
+  notificationTime    String  @map("notification_time")
+  notificationEnabled Boolean @default(true) @map("notification_enabled")
+  callAlertEnabled    Boolean @default(false) @map("call_alert_enabled")
+  callAlertTime       String? @map("call_alert_time")
+  editDeadlineEnabled Boolean @default(false) @map("edit_deadline_enabled")
+  editDeadlineTime    String? @map("edit_deadline_time")
+  vapidPublic         String? @map("vapid_public")
+  vapidPrivate        String? @map("vapid_private")
 
   @@map("system_settings")
 }
@@ -44,6 +50,7 @@ model Attendance {
   id        Int      @id @default(autoincrement())
   workerId  Int      @map("worker_id")
   category  String
+  isPresent Boolean  @default(true) @map("is_present")
   date      String   // "YYYY-MM-DD" string
   timestamp DateTime @default(now())
   worker    Worker   @relation(fields: [workerId], references: [id], onDelete: Cascade)

@@ -16,7 +16,7 @@ router.get('/workers', async (req, res) => {
     try {
         const workers = await prisma.worker.findMany({
             orderBy: { workerId: 'asc' },
-            select: { id: true, workerId: true, name: true, isActive: true, requiresPinReset: true, createdAt: true },
+            select: { id: true, workerId: true, name: true, category: true, isActive: true, requiresPinReset: true, createdAt: true },
         });
         res.json(workers);
     } catch (err) {
@@ -28,7 +28,7 @@ router.get('/workers', async (req, res) => {
 // POST /api/manager/workers — add a new worker
 router.post('/workers', async (req, res) => {
     try {
-        const { workerId, name, pin } = req.body;
+        const { workerId, name, pin, category } = req.body;
         if (!workerId || !name || !pin) {
             return res.status(400).json({ error: 'workerId, name, and pin are required' });
         }
@@ -38,8 +38,8 @@ router.post('/workers', async (req, res) => {
 
         const pinHash = await bcrypt.hash(pin, 12);
         const worker = await prisma.worker.create({
-            data: { workerId, name, pinHash, requiresPinReset: true },
-            select: { id: true, workerId: true, name: true, isActive: true, createdAt: true },
+            data: { workerId, name, pinHash, category: category || null, requiresPinReset: true },
+            select: { id: true, workerId: true, name: true, category: true, isActive: true, createdAt: true },
         });
         res.status(201).json(worker);
     } catch (err) {
@@ -51,12 +51,12 @@ router.post('/workers', async (req, res) => {
 // PUT /api/manager/workers/:id — edit worker
 router.put('/workers/:id', async (req, res) => {
     try {
-        const { workerId, name } = req.body;
+        const { workerId, name, category } = req.body;
         const updated = await prisma.worker.update({
             where: { id: parseInt(req.params.id) },
-            data: { workerId, name }
+            data: { workerId, name, category: category || null },
         });
-        res.json({ id: updated.id, workerId: updated.workerId, name: updated.name });
+        res.json({ id: updated.id, workerId: updated.workerId, name: updated.name, category: updated.category });
     } catch (err) {
         console.error('Update worker error:', err);
         res.status(500).json({ error: 'Failed to update worker' });
@@ -116,11 +116,22 @@ router.get('/settings', async (req, res) => {
     try {
         const settings = await prisma.systemSettings.findFirst();
         if (!settings) {
-            return res.json({ categories: [], notificationTime: '08:30' });
+            return res.json({
+                categories: [],
+                notificationTime: '08:30',
+                notificationEnabled: true,
+                callAlertEnabled: false,
+                callAlertTime: null,
+                editDeadlineEnabled: false,
+                editDeadlineTime: null,
+            });
         }
         let categories = [];
         try { categories = JSON.parse(settings.categories); } catch { }
-        res.json({ ...settings, categories });
+        res.json({
+            ...settings,
+            categories,
+        });
     } catch (err) {
         console.error('Get settings error:', err);
         res.status(500).json({ error: 'Failed to fetch settings' });
@@ -130,19 +141,36 @@ router.get('/settings', async (req, res) => {
 // PUT /api/manager/settings
 router.put('/settings', async (req, res) => {
     try {
-        const { categories, notificationTime } = req.body;
+        const {
+            categories,
+            notificationTime,
+            notificationEnabled,
+            callAlertEnabled,
+            callAlertTime,
+            editDeadlineEnabled,
+            editDeadlineTime,
+        } = req.body;
+
         const categoriesStr = JSON.stringify(categories || []);
+
+        const data = {
+            categories: categoriesStr,
+            notificationTime: notificationTime || '08:30',
+            notificationEnabled: notificationEnabled !== undefined ? notificationEnabled : true,
+            callAlertEnabled: callAlertEnabled !== undefined ? callAlertEnabled : false,
+            callAlertTime: callAlertTime || null,
+            editDeadlineEnabled: editDeadlineEnabled !== undefined ? editDeadlineEnabled : false,
+            editDeadlineTime: editDeadlineTime || null,
+        };
 
         let settings = await prisma.systemSettings.findFirst();
         if (settings) {
             settings = await prisma.systemSettings.update({
                 where: { id: settings.id },
-                data: { categories: categoriesStr, notificationTime: notificationTime || '08:30' },
+                data,
             });
         } else {
-            settings = await prisma.systemSettings.create({
-                data: { categories: categoriesStr, notificationTime: notificationTime || '08:30' },
-            });
+            settings = await prisma.systemSettings.create({ data });
         }
         res.json({ ...settings, categories: JSON.parse(settings.categories) });
     } catch (err) {
@@ -184,14 +212,14 @@ router.get('/attendance', async (req, res) => {
 
         const attendances = await prisma.attendance.findMany({
             where: { date: dateStr },
-            include: { worker: { select: { workerId: true, name: true } } },
+            include: { worker: { select: { workerId: true, name: true, category: true } } },
             orderBy: { timestamp: 'desc' },
         });
 
-        // Also get all active workers for "absent" calculation
+        // All active workers for calculations
         const allWorkers = await prisma.worker.findMany({
             where: { isActive: true },
-            select: { id: true, workerId: true, name: true },
+            select: { id: true, workerId: true, name: true, category: true },
         });
 
         res.json({ attendances, allWorkers, date: dateStr });
@@ -208,7 +236,7 @@ router.get('/attendance/export', async (req, res) => {
 
         const allWorkers = await prisma.worker.findMany({
             where: { isActive: true },
-            select: { id: true, workerId: true, name: true },
+            select: { id: true, workerId: true, name: true, category: true },
             orderBy: { workerId: 'asc' },
         });
 
@@ -220,14 +248,15 @@ router.get('/attendance/export', async (req, res) => {
         attendances.forEach((a) => { attendanceMap[a.workerId] = a; });
 
         // Build CSV
-        let csv = 'Worker ID,Name,Status,Category,Time\n';
+        let csv = 'Worker ID,Name,Category,Status,Time\n';
         allWorkers.forEach((w) => {
             const att = attendanceMap[w.id];
             if (att) {
                 const timeStr = new Date(att.timestamp).toLocaleTimeString('en-US', { hour12: true, hour: 'numeric', minute: '2-digit' });
-                csv += `${w.workerId},"${w.name}",Present,${att.category},${timeStr}\n`;
+                const status = att.isPresent ? 'Present' : 'Absent';
+                csv += `${w.workerId},"${w.name}",${w.category || 'Unassigned'},${status},${timeStr}\n`;
             } else {
-                csv += `${w.workerId},"${w.name}",Absent,,\n`;
+                csv += `${w.workerId},"${w.name}",${w.category || 'Unassigned'},No Response,\n`;
             }
         });
 
@@ -253,13 +282,10 @@ router.post('/send-test-notification', async (req, res) => {
 
         webpush.setVapidDetails('mailto:admin@workcomm.local', settings.vapidPublic, settings.vapidPrivate);
 
-        // Find workers who haven't punched in today
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
         const today = getISTDate();
 
         const todaysPunches = await prisma.attendance.findMany({
-            where: { date: today },
+            where: { date: today, isPresent: true },
             select: { workerId: true }
         });
         const presentWorkerIds = new Set(todaysPunches.map(p => p.workerId));
