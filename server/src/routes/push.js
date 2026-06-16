@@ -29,7 +29,7 @@ async function ensureVapidKeys() {
     }
 
     webpush.setVapidDetails(
-        'mailto:admin@workcomm.local',
+        'mailto:admin@kh-attendance.com',
         settings.vapidPublic,
         settings.vapidPrivate
     );

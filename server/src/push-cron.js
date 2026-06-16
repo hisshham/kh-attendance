@@ -14,7 +14,7 @@ async function sendNotifications(type = 'notification') {
             return;
         }
 
-        webpush.setVapidDetails('mailto:admin@workcomm.local', settings.vapidPublic, settings.vapidPrivate);
+        webpush.setVapidDetails('mailto:admin@kh-attendance.com', settings.vapidPublic, settings.vapidPrivate);
 
         const today = getISTDate();
 

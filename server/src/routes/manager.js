@@ -280,7 +280,7 @@ router.post('/send-test-notification', async (req, res) => {
             return res.status(400).json({ error: 'VAPID keys not configured. Wait for a worker to enable notifications first.' });
         }
 
-        webpush.setVapidDetails('mailto:admin@workcomm.local', settings.vapidPublic, settings.vapidPrivate);
+        webpush.setVapidDetails('mailto:admin@kh-attendance.com', settings.vapidPublic, settings.vapidPrivate);
 
         const today = getISTDate();
 
