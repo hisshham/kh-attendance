@@ -31,18 +31,21 @@ async function main() {
   });
   console.log(`✅ Manager created (username: manager, PIN: ${managerPin})`);
 
-  // 3. 50 Workers
-  const defaultPin = '123456';
-  const workerHash = await bcrypt.hash(defaultPin, 12);
-  for (let i = 1; i <= 50; i++) {
-    const wid = `WRK-${String(i).padStart(3, '0')}`;
-    await prisma.worker.upsert({
-      where: { workerId: wid },
-      update: {},
-      create: { workerId: wid, name: `Worker ${i}`, pinHash: workerHash, requiresPinReset: true },
-    });
+  // 3. Workers — only seed if no workers exist yet
+  const existingWorkerCount = await prisma.worker.count();
+  if (existingWorkerCount > 0) {
+    console.log(`⏭️  ${existingWorkerCount} workers already exist, skipping worker seed`);
+  } else {
+    const defaultPin = '123456';
+    const workerHash = await bcrypt.hash(defaultPin, 12);
+    for (let i = 1; i <= 50; i++) {
+      const wid = `WRK-${String(i).padStart(3, '0')}`;
+      await prisma.worker.create({
+        data: { workerId: wid, name: `Worker ${i}`, pinHash: workerHash, requiresPinReset: true },
+      });
+    }
+    console.log(`✅ 50 Workers created (PIN: ${defaultPin}, must reset on first login)`);
   }
-  console.log(`✅ 50 Workers created (PIN: ${defaultPin}, must reset on first login)`);
 
   console.log('\n🎉 Seeding complete!');
 }
@@ -50,3 +53,4 @@ async function main() {
 main()
   .catch((e) => { console.error('❌ Seed error:', e); process.exit(1); })
   .finally(() => prisma.$disconnect());
+

@@ -7,7 +7,9 @@ services:
     startCommand: node src/index.js
     envVars:
       - key: DATABASE_URL
-        value: file:./prisma/dev.db
+        sync: false
+      - key: DIRECT_URL
+        sync: false
       - key: JWT_SECRET
         generateValue: true
       - key: REFRESH_SECRET
@@ -18,7 +20,3 @@ services:
         value: https://kh-msg.netlify.app
       - key: MANAGER_DEFAULT_PIN
         value: "123456"
-    disk:
-      name: sqlite-data
-      mountPath: /opt/render/project/src/prisma
-      sizeGB: 1

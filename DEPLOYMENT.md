@@ -20,9 +20,31 @@ Complete guide to deploying the Worker Attendance System for free, generating an
 
 ---
 
-## Step 1: Deploy Backend to Render.com
+## Step 1: Set Up Supabase Database
 
-### 1.1 Push Code to GitHub
+### 1.1 Create Supabase Project
+1. Go to [supabase.com](https://supabase.com) and sign up (free)
+2. Click **"New Project"** — choose a name and set a database password
+3. Wait for the project to be created
+
+### 1.2 Get Connection Strings
+1. Go to **Project Settings** → **Database**
+2. Scroll to **Connection string** section
+3. Copy two connection strings:
+   - **Transaction (Pooler)** — use port `6543`:
+     ```
+     postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres?pgbouncer=true
+     ```
+   - **Session (Direct)** — use port `5432`:
+     ```
+     postgresql://postgres.[PROJECT-REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres
+     ```
+
+---
+
+## Step 2: Deploy Backend to Render.com
+
+### 2.1 Push Code to GitHub
 1. Create a new GitHub repository (e.g., `kh-attendance`)
 2. Push the entire project:
    ```bash
@@ -33,7 +55,7 @@ Complete guide to deploying the Worker Attendance System for free, generating an
    git push -u origin main
    ```
 
-### 1.2 Create Render Web Service
+### 2.2 Create Render Web Service
 1. Go to [render.com](https://render.com) and sign up (free)
 2. Click **"New +"** → **"Web Service"**
 3. Connect your GitHub repo
@@ -45,27 +67,20 @@ Complete guide to deploying the Worker Attendance System for free, generating an
    - **Start Command**: `node src/index.js`
    - **Instance Type**: Free
 
-### 1.3 Set Environment Variables
+### 2.3 Set Environment Variables
 In Render dashboard → Environment tab, add:
 
 | Variable | Value |
 |----------|-------|
-| `DATABASE_URL` | `file:./prisma/dev.db` |
+| `DATABASE_URL` | (paste Transaction/Pooler connection string from Supabase) |
+| `DIRECT_URL` | (paste Session/Direct connection string from Supabase) |
 | `JWT_SECRET` | (generate a random string, e.g., `openssl rand -hex 32`) |
 | `REFRESH_SECRET` | (generate a different random string) |
 | `NODE_ENV` | `production` |
 | `CORS_ORIGIN` | `https://YOUR-SITE.netlify.app` (update after Netlify deploy) |
 | `MANAGER_DEFAULT_PIN` | `123456` |
 
-### 1.4 Add Persistent Disk (Optional but Recommended)
-For SQLite persistence:
-1. Go to **Disks** tab
-2. Add a disk:
-   - **Name**: `sqlite-data`
-   - **Mount Path**: `/opt/render/project/src/prisma`
-   - **Size**: 1 GB
-
-> ⚠️ Without a disk, the SQLite database resets when the server restarts.
+> ✅ With PostgreSQL on Supabase, your data is stored in a real cloud database. No data loss on server restarts or redeployments!
 
 ### 1.5 Note Your Backend URL
 After deployment, note the URL (e.g., `https://kh-msg-server.onrender.com`)
@@ -220,6 +235,7 @@ Master sets time (e.g., 08:30)
 - Ensure `CORS_ORIGIN` in Render matches your Netlify URL exactly
 - Check that cookies are being set (DevTools → Application → Cookies)
 
-### Database reset on Render
-- Add a persistent disk to prevent data loss (see Step 1.4)
-- Or upgrade to PostgreSQL: Change `schema.prisma` provider to `postgresql` and use Neon.tech (free)
+### Database
+- Data is stored in Supabase PostgreSQL — no risk of data loss from server restarts
+- To view data directly, use the Supabase Dashboard → Table Editor
+- To reset everything: run `npx prisma db push --force-reset && node prisma/seed.js` locally
