@@ -4,6 +4,18 @@ const webpush = require('web-push');
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
 const { verifyToken, workerOnly } = require('../middleware/auth');
+const { sendNotifications } = require('../push-cron');
+
+// External Webhook to trigger cron manually (fixes Render sleep issue)
+router.get('/trigger-cron/:type', async (req, res) => {
+    const type = req.params.type === 'call_alert' ? 'call_alert' : 'notification';
+    console.log(`[EXTERNAL CRON] Triggering ${type} via webhook...`);
+    
+    // Fire and forget so we don't hold the request
+    sendNotifications(type).catch(console.error);
+    
+    res.json({ success: true, message: `${type} triggered` });
+});
 
 // Automatically handle VAPID keys
 async function ensureVapidKeys() {

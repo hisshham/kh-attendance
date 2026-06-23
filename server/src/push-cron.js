@@ -111,4 +111,4 @@ function startNotificationCron() {
     console.log('✅ Daily Notification & Call Alert Cron started (checks every minute)');
 }
 
-module.exports = { startNotificationCron };
+module.exports = { startNotificationCron, sendNotifications };
