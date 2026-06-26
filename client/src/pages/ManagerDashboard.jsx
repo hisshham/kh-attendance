@@ -59,10 +59,11 @@ export default function ManagerDashboard() {
     const [workers, setWorkers] = useState([]);
 
     // Master Data
-    const [masterData, setMasterData] = useState({ lineData: [], categories: [], experience: [] });
+    const [masterData, setMasterData] = useState({ lineData: [], categories: [] });
     const [newLineData, setNewLineData] = useState('');
     const [newCategory, setNewCategory] = useState('');
     const [newExperience, setNewExperience] = useState('');
+    const [selectedSettingCategory, setSelectedSettingCategory] = useState(null);
 
     // Settings
     const [notificationTime, setNotificationTime] = useState('08:30');
@@ -106,7 +107,14 @@ export default function ManagerDashboard() {
     async function loadSettings() {
         try {
             const res = await api.get('/api/manager/settings');
-            setMasterData(res.data.masterData || { lineData: [], categories: [], experience: [] });
+            let md = res.data.masterData || { lineData: [], categories: [] };
+            // Auto-migrate legacy flat structures to the hierarchical model
+            if (md.categories && typeof md.categories[0] === 'string') {
+                const legacyExp = md.experience || [];
+                md.categories = md.categories.map(c => ({ name: c, experience: legacyExp }));
+                delete md.experience;
+            }
+            setMasterData(md);
             setNotificationTime(res.data.notificationTime || '08:30');
             setNotificationEnabled(res.data.notificationEnabled !== false);
             setCallAlertEnabled(res.data.callAlertEnabled || false);
@@ -206,20 +214,41 @@ export default function ManagerDashboard() {
         }
     }
     function removeLineData(item) { setMasterData({ ...masterData, lineData: masterData.lineData.filter(i => i !== item) }); }
+    
     function addCategory() {
-        if (newCategory.trim() && !masterData.categories.includes(newCategory.trim())) {
-            setMasterData({ ...masterData, categories: [...masterData.categories, newCategory.trim()] });
+        const val = newCategory.trim();
+        if (val && !masterData.categories.find(c => c.name === val)) {
+            setMasterData({ ...masterData, categories: [...masterData.categories, { name: val, experience: [] }] });
             setNewCategory('');
         }
     }
-    function removeCategory(cat) { setMasterData({ ...masterData, categories: masterData.categories.filter(c => c !== cat) }); }
+    function removeCategory(catName) { 
+        setMasterData({ ...masterData, categories: masterData.categories.filter(c => c.name !== catName) }); 
+        if (selectedSettingCategory === catName) setSelectedSettingCategory(null);
+    }
+    
     function addExperience() {
-        if (newExperience.trim() && !masterData.experience.includes(newExperience.trim())) {
-            setMasterData({ ...masterData, experience: [...masterData.experience, newExperience.trim()] });
+        const val = newExperience.trim();
+        if (val && selectedSettingCategory) {
+            const updatedCats = masterData.categories.map(c => {
+                if (c.name === selectedSettingCategory && !c.experience.includes(val)) {
+                    return { ...c, experience: [...c.experience, val] };
+                }
+                return c;
+            });
+            setMasterData({ ...masterData, categories: updatedCats });
             setNewExperience('');
         }
     }
-    function removeExperience(exp) { setMasterData({ ...masterData, experience: masterData.experience.filter(e => e !== exp) }); }
+    function removeExperience(catName, expName) {
+        const updatedCats = masterData.categories.map(c => {
+            if (c.name === catName) {
+                return { ...c, experience: c.experience.filter(e => e !== expName) };
+            }
+            return c;
+        });
+        setMasterData({ ...masterData, categories: updatedCats });
+    }
 
     async function exportCSV() {
         try {
@@ -252,6 +281,14 @@ export default function ManagerDashboard() {
         return { name: ld, total, present, absent };
     });
 
+    // Category breakdown
+    const categoryStats = masterData.categories.map(cat => {
+        const total = allWorkers.filter(w => w.category === cat.name).length;
+        const present = presentAttendances.filter(a => a.worker?.category === cat.name).length;
+        const absent = absentAttendances.filter(a => a.worker?.category === cat.name).length;
+        return { name: cat.name, total, present, absent };
+    });
+
     const tabItems = [
         { id: 'overview', icon: Icons.dashboard, label: 'Overview' },
         { id: 'attendance', icon: Icons.clipboard, label: 'Daily Logs' },
@@ -282,6 +319,11 @@ export default function ManagerDashboard() {
         } else if (expandedCard === 'notMarked') {
             title = `Not Marked (${notMarkedCount})`;
             items = notMarkedWorkers;
+        } else if (expandedCard?.startsWith('cat_')) {
+            const catName = expandedCard.replace('cat_', '');
+            const catWorkers = allWorkers.filter(w => w.category === catName);
+            title = `Category: ${catName} (${catWorkers.length})`;
+            items = catWorkers;
         }
 
         return (
@@ -297,9 +339,9 @@ export default function ManagerDashboard() {
                                 <span className="wd-name">{w.name}</span>
                                 <span className="wd-id">{w.workerId}</span>
                                 <div className="wd-badges">
-                                    {w.lineData && <span className="badge badge-teal">{w.lineData}</span>}
-                                    {w.category && <span className="badge badge-purple">{w.category}</span>}
-                                    {w.experience && <span className="badge badge-orange">{w.experience}</span>}
+                                    {w.lineData && <span className="badge badge-line">{w.lineData}</span>}
+                                    {w.category && <span className="badge badge-category">{w.category}</span>}
+                                    {w.experience && <span className="badge badge-experience">{w.experience}</span>}
                                 </div>
                                 {w.timestamp && <span className="wd-time">⏰ {new Date(w.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</span>}
                             </div>
@@ -429,6 +471,25 @@ export default function ManagerDashboard() {
                                     </div>
                                 )}
 
+                                {/* Category Breakdown */}
+                                {categoryStats.length > 0 && (
+                                    <div style={{ marginBottom: '20px' }}>
+                                        <h3 style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600 }}>Category Breakdown</h3>
+                                        <div className="stats-row">
+                                            {categoryStats.map(cat => (
+                                                <div key={cat.name} className={`stat-card category-card ${expandedCard === `cat_${cat.name}` ? 'active' : ''}`} onClick={() => setExpandedCard(expandedCard === `cat_${cat.name}` ? null : `cat_${cat.name}`)} style={{ borderLeft: '3px solid #8E8E93' }}>
+                                                    <span className="stat-label">{cat.name}</span>
+                                                    <span className="stat-number">{cat.total}</span>
+                                                    <div style={{ display: 'flex', gap: '10px', marginTop: '6px', fontSize: '12px' }}>
+                                                        <span style={{ color: 'var(--accent-green)' }}>✓ {cat.present}</span>
+                                                        <span style={{ color: 'var(--accent-red)' }}>✗ {cat.absent}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Recent Punches */}
                                 <div className="card">
                                     <h3>Recent Punches</h3>
@@ -439,9 +500,9 @@ export default function ManagerDashboard() {
                                                 {attendances.slice(0, 10).map(a => (
                                                     <tr key={a.id}>
                                                         <td><strong>{a.worker?.name}</strong> <span style={{ color: 'var(--text-muted)', fontSize: '11px' }}>({a.worker?.workerId})</span></td>
-                                                        <td><span className="badge badge-teal">{a.lineData || '—'}</span></td>
-                                                        <td><span className="badge badge-purple">{a.category || '—'}</span></td>
-                                                        <td><span className="badge badge-orange">{a.experience || '—'}</span></td>
+                                                        <td><span className="badge badge-line">{a.lineData || '—'}</span></td>
+                                                        <td><span className="badge badge-category">{a.category || '—'}</span></td>
+                                                        <td><span className="badge badge-experience">{a.experience || '—'}</span></td>
                                                         <td><span className={`badge ${a.isPresent ? 'badge-green' : 'badge-red'}`}>{a.isPresent ? 'Present' : 'Absent'}</span></td>
                                                         <td>{new Date(a.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</td>
                                                     </tr>
@@ -467,9 +528,9 @@ export default function ManagerDashboard() {
                                                     <tr key={a.id}>
                                                         <td style={{ fontFamily: 'monospace' }}>{a.worker?.workerId}</td>
                                                         <td>{a.worker?.name}</td>
-                                                        <td><span className="badge badge-teal">{a.lineData || '—'}</span></td>
-                                                        <td><span className="badge badge-purple">{a.category || '—'}</span></td>
-                                                        <td><span className="badge badge-orange">{a.experience || '—'}</span></td>
+                                                        <td><span className="badge badge-line">{a.lineData || '—'}</span></td>
+                                                        <td><span className="badge badge-category">{a.category || '—'}</span></td>
+                                                        <td><span className="badge badge-experience">{a.experience || '—'}</span></td>
                                                         <td>{new Date(a.timestamp).toLocaleTimeString('en-IN', { hour12: true })}</td>
                                                     </tr>
                                                 ))}
@@ -499,8 +560,8 @@ export default function ManagerDashboard() {
                                                 <span className="wd-name">{w.name}</span>
                                                 <span className="wd-id">{w.workerId}</span>
                                                 <div className="wd-badges">
-                                                    {w.lineData && <span className="badge badge-teal">{w.lineData}</span>}
-                                                    {w.category && <span className="badge badge-purple">{w.category}</span>}
+                                                    {w.lineData && <span className="badge badge-line">{w.lineData}</span>}
+                                                    {w.category && <span className="badge badge-category">{w.category}</span>}
                                                 </div>
                                             </div>
                                         ))}
@@ -530,23 +591,23 @@ export default function ManagerDashboard() {
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px', display: 'block' }}>Line Data</label>
-                                        <select value={newWorker.lineData} onChange={(e) => setNewWorker({ ...newWorker, lineData: e.target.value })}>
+                                        <select value={newWorker.lineData} onChange={(e) => setNewWorker({ ...newWorker, lineData: e.target.value })} required>
                                             <option value="">Select...</option>
                                             {masterData.lineData.map(l => <option key={l} value={l}>{l}</option>)}
                                         </select>
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px', display: 'block' }}>Category</label>
-                                        <select value={newWorker.category} onChange={(e) => setNewWorker({ ...newWorker, category: e.target.value })}>
+                                        <select value={newWorker.category} onChange={(e) => setNewWorker({ ...newWorker, category: e.target.value, experience: '' })} required>
                                             <option value="">Select...</option>
-                                            {masterData.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                            {masterData.categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                                         </select>
                                     </div>
                                     <div>
                                         <label style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600, marginBottom: '4px', display: 'block' }}>Experience</label>
-                                        <select value={newWorker.experience} onChange={(e) => setNewWorker({ ...newWorker, experience: e.target.value })}>
+                                        <select value={newWorker.experience} onChange={(e) => setNewWorker({ ...newWorker, experience: e.target.value })} required disabled={!newWorker.category}>
                                             <option value="">Select...</option>
-                                            {masterData.experience.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                                            {newWorker.category && masterData.categories.find(c => c.name === newWorker.category)?.experience.map(ex => <option key={ex} value={ex}>{ex}</option>)}
                                         </select>
                                     </div>
                                     <button type="submit" className="btn btn-primary" style={{ alignSelf: 'end' }}>+ Add</button>
@@ -567,13 +628,13 @@ export default function ManagerDashboard() {
                                                             <option value="">No Line Data</option>
                                                             {masterData.lineData.map(l => <option key={l} value={l}>{l}</option>)}
                                                         </select>
-                                                        <select value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })}>
-                                                            <option value="">No Category</option>
-                                                            {masterData.categories.map(c => <option key={c} value={c}>{c}</option>)}
+                                                        <select value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value, experience: '' })} required>
+                                                            <option value="">Select Category</option>
+                                                            {masterData.categories.map(c => <option key={c.name} value={c.name}>{c.name}</option>)}
                                                         </select>
-                                                        <select value={editData.experience} onChange={(e) => setEditData({ ...editData, experience: e.target.value })}>
-                                                            <option value="">No Experience</option>
-                                                            {masterData.experience.map(ex => <option key={ex} value={ex}>{ex}</option>)}
+                                                        <select value={editData.experience} onChange={(e) => setEditData({ ...editData, experience: e.target.value })} required disabled={!editData.category}>
+                                                            <option value="">Select Experience</option>
+                                                            {editData.category && masterData.categories.find(c => c.name === editData.category)?.experience.map(ex => <option key={ex} value={ex}>{ex}</option>)}
                                                         </select>
                                                     </div>
                                                     <div style={{ display: 'flex', gap: '6px' }}>
@@ -590,9 +651,9 @@ export default function ManagerDashboard() {
                                                         </div>
                                                     </div>
                                                     <div className="worker-card-meta">
-                                                        {w.lineData && <span className="badge badge-teal">{w.lineData}</span>}
-                                                        {w.category && <span className="badge badge-purple">{w.category}</span>}
-                                                        {w.experience && <span className="badge badge-orange">{w.experience}</span>}
+                                                        {w.lineData && <span className="badge badge-line">{w.lineData}</span>}
+                                                        {w.category && <span className="badge badge-category">{w.category}</span>}
+                                                        {w.experience && <span className="badge badge-experience">{w.experience}</span>}
                                                         <span className={`badge ${w.isActive ? 'badge-green' : 'badge-red'}`}>{w.isActive ? 'Active' : 'Inactive'}</span>
                                                     </div>
                                                     <div className="worker-card-actions">
@@ -642,7 +703,11 @@ export default function ManagerDashboard() {
                                             <h4>Categories (Worker Types)</h4>
                                             <div className="category-tags">
                                                 {masterData.categories.map(cat => (
-                                                    <span key={cat} className="tag">{cat} <button type="button" onClick={() => removeCategory(cat)}>×</button></span>
+                                                    <span key={cat.name} className={`tag ${selectedSettingCategory === cat.name ? 'active' : ''}`} 
+                                                          onClick={() => setSelectedSettingCategory(cat.name)}
+                                                          style={{ cursor: 'pointer', border: selectedSettingCategory === cat.name ? '1px solid var(--accent-blue)' : '' }}>
+                                                        {cat.name} <button type="button" onClick={(e) => { e.stopPropagation(); removeCategory(cat.name); }}>×</button>
+                                                    </span>
                                                 ))}
                                                 {masterData.categories.length === 0 && <p className="empty-text">No categories yet</p>}
                                             </div>
@@ -655,18 +720,24 @@ export default function ManagerDashboard() {
 
                                         {/* Experience */}
                                         <div className="master-data-section">
-                                            <h4>Experience (Skill Levels)</h4>
-                                            <div className="category-tags">
-                                                {masterData.experience.map(exp => (
-                                                    <span key={exp} className="tag">{exp} <button type="button" onClick={() => removeExperience(exp)}>×</button></span>
-                                                ))}
-                                                {masterData.experience.length === 0 && <p className="empty-text">No experience levels yet</p>}
-                                            </div>
-                                            <div className="tag-add-row">
-                                                <input placeholder="e.g. Skilled" value={newExperience} onChange={(e) => setNewExperience(e.target.value)}
-                                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addExperience(); } }} />
-                                                <button type="button" className="btn btn-sm btn-outline" onClick={addExperience}>Add</button>
-                                            </div>
+                                            <h4>Experience (Skill Levels) {selectedSettingCategory ? `for ${selectedSettingCategory}` : '- Select a category first'}</h4>
+                                            {selectedSettingCategory ? (
+                                                <>
+                                                    <div className="category-tags">
+                                                        {masterData.categories.find(c => c.name === selectedSettingCategory)?.experience.map(exp => (
+                                                            <span key={exp} className="tag">{exp} <button type="button" onClick={() => removeExperience(selectedSettingCategory, exp)}>×</button></span>
+                                                        ))}
+                                                        {(!masterData.categories.find(c => c.name === selectedSettingCategory)?.experience.length) && <p className="empty-text">No experience levels for {selectedSettingCategory}</p>}
+                                                    </div>
+                                                    <div className="tag-add-row">
+                                                        <input placeholder="e.g. Skilled" value={newExperience} onChange={(e) => setNewExperience(e.target.value)}
+                                                            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addExperience(); } }} />
+                                                        <button type="button" className="btn btn-sm btn-outline" onClick={addExperience}>Add</button>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <p className="empty-text">Please select a category above to manage its experience levels.</p>
+                                            )}
                                         </div>
                                     </div>
                                     <button className="settings-save-btn" onClick={saveMasterData}>Save Master Data</button>

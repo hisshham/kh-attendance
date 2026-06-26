@@ -195,13 +195,13 @@ export default function WorkerDashboard() {
                         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
                             <span className="badge badge-manager">ID: {user?.workerId}</span>
                             {workerInfo?.lineData && (
-                                <span className="badge badge-teal">{workerInfo.lineData}</span>
+                                <span className="badge badge-line">{workerInfo.lineData}</span>
                             )}
                             {workerInfo?.category && (
-                                <span className="badge badge-purple">{workerInfo.category}</span>
+                                <span className="badge badge-category">{workerInfo.category}</span>
                             )}
                             {workerInfo?.experience && (
-                                <span className="badge badge-orange">{workerInfo.experience}</span>
+                                <span className="badge badge-experience">{workerInfo.experience}</span>
                             )}
                         </div>
                         <div style={{ display: 'flex', gap: '6px' }}>
