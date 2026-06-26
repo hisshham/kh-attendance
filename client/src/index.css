@@ -1065,19 +1065,19 @@ tr:hover td { background: var(--bg-hover); }
   .mobile-nav-item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     width: 100%;
     text-align: left;
-    padding: 10px 14px;
+    padding: 14px 16px;
     border-radius: var(--radius-sm);
     background: transparent;
     border: none;
     color: var(--text-secondary);
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 500;
     font-family: var(--font-family);
     cursor: pointer;
-    min-height: 44px;
+    min-height: 48px;
   }
   .mobile-nav-item.active { background: var(--accent-blue); color: #fff; }
   .mobile-nav-item.logout-item {
@@ -1113,8 +1113,11 @@ tr:hover td { background: var(--bg-hover); }
 }
 
 /* ===== PWA iOS Safe Area ===== */
-@supports (padding: env(safe-area-inset-top)) {
-  .mobile-topbar { padding-top: calc(12px + env(safe-area-inset-top)); }
-  .worker-container { padding-top: calc(20px + env(safe-area-inset-top)); padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
-  .login-container { padding-top: calc(20px + env(safe-area-inset-top)); }
+@supports (padding-top: max(0px)) {
+  .mobile-topbar { 
+    padding-top: max(12px, env(safe-area-inset-top)); 
+    padding-bottom: 12px;
+  }
+  .worker-container { padding-top: max(20px, env(safe-area-inset-top)); padding-bottom: max(20px, env(safe-area-inset-bottom)); }
+  .login-container { padding-top: max(20px, env(safe-area-inset-top)); }
 }
