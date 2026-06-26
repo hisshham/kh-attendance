@@ -12,7 +12,7 @@ async function main() {
   if (!existingSettings) {
     await prisma.systemSettings.create({
       data: {
-        categories: JSON.stringify(["Skilled Worker", "Fully Skilled", "Semi Skilled", "Worker"]),
+        masterData: JSON.stringify({ lineData: [], categories: ["Table Worker", "QC"], experience: ["Skilled", "Semi-Skilled"] }),
         notificationTime: "08:30",
       },
     });
