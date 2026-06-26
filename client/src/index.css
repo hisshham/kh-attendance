@@ -237,9 +237,11 @@ select option { background: var(--bg-secondary); color: var(--text-primary); }
 .badge-manager { background: rgba(0, 122, 255, 0.12); color: var(--accent-blue); border: 1px solid rgba(0, 122, 255, 0.2); }
 .badge-green { background: rgba(52, 199, 89, 0.12); color: var(--accent-green); border: 1px solid rgba(52, 199, 89, 0.2); }
 .badge-red { background: rgba(255, 59, 48, 0.12); color: var(--accent-red); border: 1px solid rgba(255, 59, 48, 0.2); }
-.badge-line { background: rgba(88, 86, 214, 0.15); color: #7B79F2; border: 1px solid rgba(88, 86, 214, 0.25); }
-.badge-category { background: rgba(142, 142, 147, 0.15); color: #A1A1A6; border: 1px solid rgba(142, 142, 147, 0.25); }
-.badge-experience { background: rgba(162, 132, 94, 0.15); color: #C4A67B; border: 1px solid rgba(162, 132, 94, 0.25); }
+.badge-line, .badge-category, .badge-experience { 
+  background: rgba(120, 120, 128, 0.12); 
+  color: var(--text-secondary); 
+  border: 1px solid rgba(120, 120, 128, 0.2); 
+}
 .badge-muted { background: var(--bg-hover); color: var(--text-secondary); border: 1px solid var(--border-color); }
 
 

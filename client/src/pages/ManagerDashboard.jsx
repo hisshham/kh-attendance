@@ -286,7 +286,11 @@ export default function ManagerDashboard() {
         const total = allWorkers.filter(w => w.category === cat.name).length;
         const present = presentAttendances.filter(a => a.worker?.category === cat.name).length;
         const absent = absentAttendances.filter(a => a.worker?.category === cat.name).length;
-        return { name: cat.name, total, present, absent };
+        const expBreakdown = cat.experience.map(exp => ({
+            name: exp,
+            count: allWorkers.filter(w => w.category === cat.name && w.experience === exp).length
+        }));
+        return { name: cat.name, total, present, absent, expBreakdown };
     });
 
     const tabItems = [
@@ -480,10 +484,20 @@ export default function ManagerDashboard() {
                                                 <div key={cat.name} className={`stat-card category-card ${expandedCard === `cat_${cat.name}` ? 'active' : ''}`} onClick={() => setExpandedCard(expandedCard === `cat_${cat.name}` ? null : `cat_${cat.name}`)} style={{ borderLeft: '3px solid #8E8E93' }}>
                                                     <span className="stat-label">{cat.name}</span>
                                                     <span className="stat-number">{cat.total}</span>
-                                                    <div style={{ display: 'flex', gap: '10px', marginTop: '6px', fontSize: '12px' }}>
+                                                    <div style={{ display: 'flex', gap: '10px', marginTop: '6px', fontSize: '12px', borderBottom: '1px solid var(--separator)', paddingBottom: '6px', marginBottom: '6px' }}>
                                                         <span style={{ color: 'var(--accent-green)' }}>✓ {cat.present}</span>
                                                         <span style={{ color: 'var(--accent-red)' }}>✗ {cat.absent}</span>
                                                     </div>
+                                                    {cat.expBreakdown && cat.expBreakdown.length > 0 && (
+                                                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                                                            {cat.expBreakdown.map(exp => (
+                                                                <div key={exp.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                                    <span>{exp.name}</span>
+                                                                    <strong>{exp.count}</strong>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
