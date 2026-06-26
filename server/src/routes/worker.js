@@ -17,10 +17,10 @@ router.get('/attendance/today', async (req, res) => {
             where: { workerId_date: { workerId: req.user.id, date: today } },
         });
 
-        // Get worker's assigned category
+        // Get worker's assigned fields
         const worker = await prisma.worker.findUnique({
             where: { id: req.user.id },
-            select: { category: true, name: true, workerId: true },
+            select: { lineData: true, category: true, experience: true, name: true, workerId: true },
         });
 
         // Get settings for edit deadline info
@@ -63,16 +63,18 @@ router.post('/attendance', async (req, res) => {
             return res.status(400).json({ error: 'Attendance already marked for today' });
         }
 
-        // Get worker's assigned category
+        // Get worker's assigned fields
         const worker = await prisma.worker.findUnique({
             where: { id: req.user.id },
-            select: { category: true },
+            select: { lineData: true, category: true, experience: true },
         });
 
         const attendance = await prisma.attendance.create({
             data: {
                 workerId: req.user.id,
+                lineData: worker?.lineData || 'Unassigned',
                 category: worker?.category || 'Unassigned',
+                experience: worker?.experience || 'Unassigned',
                 isPresent,
                 date: today,
             },
@@ -84,7 +86,9 @@ router.post('/attendance', async (req, res) => {
             io.to('manager').emit('attendance_update', {
                 workerId: req.user.workerId,
                 name: req.user.name,
+                lineData: worker?.lineData || 'Unassigned',
                 category: worker?.category || 'Unassigned',
+                experience: worker?.experience || 'Unassigned',
                 isPresent,
                 date: today,
             });

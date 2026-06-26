@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import api from '../services/api';
 import { getSocket } from '../services/socket';
 
@@ -7,6 +8,7 @@ const hasPushSupport = typeof window !== 'undefined' && 'Notification' in window
 
 export default function WorkerDashboard() {
     const { user, logout } = useAuth();
+    const { theme, toggleTheme } = useTheme();
     const [todayAttendance, setTodayAttendance] = useState(null);
     const [workerInfo, setWorkerInfo] = useState(null);
     const [editDeadlineEnabled, setEditDeadlineEnabled] = useState(false);
@@ -52,16 +54,13 @@ export default function WorkerDashboard() {
             const res = await api.get('/api/push/vapid-key');
             if (!res.data.publicKey) return;
 
-            // Handle VAPID key mismatch: unsubscribe old, then subscribe new
             let sub = await reg.pushManager.getSubscription();
             if (sub) {
                 try {
-                    // Try to use existing subscription
                     await api.post('/api/push/subscribe', sub);
                     setPushEnabled(true);
                     return;
                 } catch {
-                    // If existing sub fails, unsubscribe and create new
                     await sub.unsubscribe();
                     await api.post('/api/push/unsubscribe', { endpoint: sub.endpoint });
                 }
@@ -75,7 +74,6 @@ export default function WorkerDashboard() {
             setPushEnabled(true);
         } catch (err) {
             console.error('Push error:', err);
-            // Handle applicationServerKey mismatch specifically
             if (err.message && err.message.includes('applicationServerKey')) {
                 try {
                     const reg = await navigator.serviceWorker.ready;
@@ -84,7 +82,6 @@ export default function WorkerDashboard() {
                         await existingSub.unsubscribe();
                         await api.post('/api/push/unsubscribe', { endpoint: existingSub.endpoint });
                     }
-                    // Retry subscription
                     const res = await api.get('/api/push/vapid-key');
                     const newSub = await reg.pushManager.subscribe({
                         userVisibleOnly: true,
@@ -163,7 +160,6 @@ export default function WorkerDashboard() {
         }
     }
 
-    // Check if editing is allowed based on deadline
     function canEdit() {
         if (!editDeadlineEnabled) return true;
         if (!editDeadlineTime || !serverTime) return true;
@@ -176,7 +172,17 @@ export default function WorkerDashboard() {
     const greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
     const isEditAllowed = canEdit();
 
-    if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><div className="loader"></div></div>;
+    const ThemeToggleSmall = () => (
+        <button className="theme-toggle" onClick={toggleTheme} style={{ padding: '4px 8px' }}>
+            {theme === 'dark' ? (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+            ) : (
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+            )}
+        </button>
+    );
+
+    if (loading) return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: 'var(--bg-primary)' }}><div className="loader"></div></div>;
 
     return (
         <div className="worker-container">
@@ -186,13 +192,22 @@ export default function WorkerDashboard() {
                     <p className="worker-greeting">{greeting}</p>
                     <h1 className="worker-name">{user?.name || user?.workerId}</h1>
                     <div className="worker-header-actions">
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-                            <span className="badge badge-amber">ID: {user?.workerId}</span>
+                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            <span className="badge badge-manager">ID: {user?.workerId}</span>
+                            {workerInfo?.lineData && (
+                                <span className="badge badge-teal">{workerInfo.lineData}</span>
+                            )}
                             {workerInfo?.category && (
-                                <span className="badge badge-teal">{workerInfo.category}</span>
+                                <span className="badge badge-purple">{workerInfo.category}</span>
+                            )}
+                            {workerInfo?.experience && (
+                                <span className="badge badge-orange">{workerInfo.experience}</span>
                             )}
                         </div>
-                        <button className="btn btn-sm btn-outline" onClick={logout}>Logout</button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            <ThemeToggleSmall />
+                            <button className="btn btn-sm btn-outline" onClick={logout}>Logout</button>
+                        </div>
                     </div>
                 </div>
 
@@ -200,14 +215,14 @@ export default function WorkerDashboard() {
                 {!pushEnabled && hasPushSupport && (
                     <div className="push-banner">
                         <div>
-                            <strong style={{ color: 'var(--accent-amber)' }}>🔔 Enable Reminders</strong>
+                            <strong style={{ color: 'var(--accent-orange)' }}>🔔 Enable Reminders</strong>
                             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>Get notified when it's time to log attendance.</p>
                         </div>
                         <button className="btn btn-sm btn-primary" onClick={requestPush}>Enable</button>
                     </div>
                 )}
                 {!hasPushSupport && (
-                    <div className="push-banner" style={{ borderColor: 'rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.06)' }}>
+                    <div className="push-banner" style={{ borderColor: 'rgba(255, 59, 48, 0.15)' }}>
                         <div>
                             <strong style={{ color: 'var(--accent-red)' }}>📱 iPhone Notice</strong>
                             <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>To receive notifications: Safari → Share → "Add to Home Screen" → open from home screen.</p>
@@ -216,12 +231,11 @@ export default function WorkerDashboard() {
                 )}
 
                 {/* Messages */}
-                {message && <div className="success-msg" style={{ marginBottom: '16px', textAlign: 'center' }}>{message}</div>}
+                {message && <div className="success-msg" style={{ marginBottom: '14px', textAlign: 'center' }}>{message}</div>}
                 {error && <div className="error-msg" style={{ textAlign: 'center' }}>{error}</div>}
 
                 {/* Main attendance area */}
                 {todayAttendance && !editing ? (
-                    /* Already marked — show status */
                     <div className="attendance-status" style={{ animation: 'fadeInUp 0.4s ease-out' }}>
                         <div className="status-icon">
                             {todayAttendance.isPresent ? '✅' : '❌'}
@@ -238,8 +252,16 @@ export default function WorkerDashboard() {
                                 </span>
                             </div>
                             <div className="status-row">
+                                <span className="status-row-label">Line Data</span>
+                                <span className="status-row-value">{todayAttendance.lineData || '—'}</span>
+                            </div>
+                            <div className="status-row">
                                 <span className="status-row-label">Category</span>
-                                <span className="status-row-value">{todayAttendance.category}</span>
+                                <span className="status-row-value">{todayAttendance.category || '—'}</span>
+                            </div>
+                            <div className="status-row">
+                                <span className="status-row-label">Experience</span>
+                                <span className="status-row-value">{todayAttendance.experience || '—'}</span>
                             </div>
                             <div className="status-row">
                                 <span className="status-row-label">Logged At</span>
@@ -260,14 +282,13 @@ export default function WorkerDashboard() {
                         )}
                     </div>
                 ) : (
-                    /* Not marked yet OR editing */
                     <div className="attendance-question" style={{ animation: 'fadeInUp 0.4s ease-out' }}>
                         <h2>{editing ? '✏️ Change Your Response' : '📋 Daily Attendance'}</h2>
                         <p className="attendance-date">
                             {new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                         </p>
 
-                        <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '16px', fontWeight: '600' }}>
+                        <p style={{ color: 'var(--text-secondary)', marginBottom: '20px', fontSize: '16px', fontWeight: '600' }}>
                             Are you present today?
                         </p>
 
@@ -293,7 +314,7 @@ export default function WorkerDashboard() {
                         {editing && (
                             <button
                                 className="btn btn-outline btn-full"
-                                style={{ marginTop: '16px' }}
+                                style={{ marginTop: '14px' }}
                                 onClick={() => setEditing(false)}
                             >
                                 Cancel

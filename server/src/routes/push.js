@@ -23,7 +23,11 @@ async function ensureVapidKeys() {
     if (!settings) {
         settings = await prisma.systemSettings.create({
             data: {
-                categories: '["Fully Skilled","Semi Skilled","Unskilled"]',
+                masterData: JSON.stringify({
+                    lineData: [],
+                    categories: [],
+                    experience: []
+                }),
                 notificationTime: '08:30',
             },
         });
