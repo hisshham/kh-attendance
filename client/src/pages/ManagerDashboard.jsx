@@ -288,7 +288,8 @@ export default function ManagerDashboard() {
         const absent = absentAttendances.filter(a => a.worker?.category === cat.name).length;
         const expBreakdown = cat.experience.map(exp => ({
             name: exp,
-            count: allWorkers.filter(w => w.category === cat.name && w.experience === exp).length
+            present: presentAttendances.filter(a => a.worker?.category === cat.name && a.worker?.experience === exp).length,
+            absent: absentAttendances.filter(a => a.worker?.category === cat.name && a.worker?.experience === exp).length,
         }));
         return { name: cat.name, total, present, absent, expBreakdown };
     });
@@ -491,9 +492,12 @@ export default function ManagerDashboard() {
                                                     {cat.expBreakdown && cat.expBreakdown.length > 0 && (
                                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', color: 'var(--text-secondary)' }}>
                                                             {cat.expBreakdown.map(exp => (
-                                                                <div key={exp.name} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                                                <div key={exp.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                                     <span>{exp.name}</span>
-                                                                    <strong>{exp.count}</strong>
+                                                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                                                        <span style={{ color: 'var(--accent-green)' }}>✓ {exp.present}</span>
+                                                                        <span style={{ color: 'var(--accent-red)' }}>✗ {exp.absent}</span>
+                                                                    </div>
                                                                 </div>
                                                             ))}
                                                         </div>
